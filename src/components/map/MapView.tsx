@@ -17,6 +17,7 @@ import {
   IconoRefugio,
   IconoRelieve,
   IconoToponimo,
+  IconoTrazar,
 } from "@/components/icons";
 import type { ElementoGeografico, TipoElemento } from "@/types/catalogo";
 import type { RedRuta, Ruta } from "@/types/rutas";
@@ -34,6 +35,16 @@ import {
 } from "./rutas";
 import { FichaElemento } from "./FichaElemento";
 import { FichaRuta } from "./FichaRuta";
+import { Planificador } from "./Planificador";
+import { medirLinea, type MetricasLinea } from "@/lib/elevacion";
+import { segmentoAPie } from "@/lib/enrutador";
+import {
+  borrarPlan,
+  guardarPlan,
+  isFirebaseConfigured,
+  listarPlanes,
+} from "@/lib/planes";
+import type { RutaPlaneada } from "@/types/plan";
 
 const CAPA_ELEMENTOS = "elementos";
 const CAPA_RUTAS = "rutas";
@@ -42,6 +53,8 @@ const CAPA_RUTAS_PULSABLE = "rutas-pulsable";
 const CAPA_RUTA_DESTACADA = "ruta-destacada";
 const CAPA_RUTA_EXTREMOS = "ruta-extremos";
 const CAPA_RUTA_CURSOR = "ruta-cursor";
+const CAPA_PLAN_LINEA = "plan-linea";
+const CAPA_PLAN_PUNTOS = "plan-puntos";
 
 const COLECCION_VACIA: GeoJSON.FeatureCollection = {
   type: "FeatureCollection",
@@ -111,6 +124,20 @@ export default function MapView() {
   const [toponimos, setToponimos] = useState(true);
   const [seleccion, setSeleccion] = useState<Seleccion | null>(null);
   const [sentidoInvertido, setSentidoInvertido] = useState(false);
+
+  // Estado del planificador de rutas propias
+  const [modoPlan, setModoPlan] = useState(false);
+  const modoPlanRef = useRef(false);
+  const [puntosPlan, setPuntosPlan] = useState<[number, number][]>([]);
+  const [segmentosPlan, setSegmentosPlan] = useState<[number, number][][]>([]);
+  const [modoSenderos, setModoSenderos] = useState(true);
+  const [enrutando, setEnrutando] = useState(false);
+  const enrutandoRef = useRef(false);
+  const [metricasPlan, setMetricasPlan] = useState<MetricasLinea | null>(null);
+  const [midiendo, setMidiendo] = useState(false);
+  const [guardandoPlan, setGuardandoPlan] = useState(false);
+  const [planes, setPlanes] = useState<RutaPlaneada[] | null>(null);
+  const [planVisible, setPlanVisible] = useState<RutaPlaneada | null>(null);
   const [tiposActivos, setTiposActivos] = useState<TipoElemento[]>([
     "pico",
     "ibon",
@@ -237,6 +264,39 @@ export default function MapView() {
         },
       });
 
+      // Borrador del planificador: trazado ocre discontinuo y puntos marcados
+      mapa.addSource(CAPA_PLAN_LINEA, { type: "geojson", data: COLECCION_VACIA });
+      mapa.addLayer({
+        id: `${CAPA_PLAN_LINEA}-casco`,
+        type: "line",
+        source: CAPA_PLAN_LINEA,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": "#16130f", "line-width": 5, "line-opacity": 0.6 },
+      });
+      mapa.addLayer({
+        id: CAPA_PLAN_LINEA,
+        type: "line",
+        source: CAPA_PLAN_LINEA,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          // Ojo: line-dasharray + terreno 3D congela el renderizador de
+          // MapLibre (comprobado empíricamente); la línea va sólida
+          "line-color": "#c99655",
+          "line-width": 3,
+        },
+      });
+      mapa.addSource(CAPA_PLAN_PUNTOS, { type: "geojson", data: COLECCION_VACIA });
+      mapa.addLayer({
+        id: CAPA_PLAN_PUNTOS,
+        type: "symbol",
+        source: CAPA_PLAN_PUNTOS,
+        layout: {
+          "icon-image": "plan-punto",
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
+      });
+
       const totales: Record<RedRuta, number> = { gr: 0, pr: 0, sl: 0 };
       for (const ruta of rutas.values()) totales[ruta.red] += 1;
       setTotalesRutas(totales);
@@ -244,6 +304,11 @@ export default function MapView() {
     });
 
     mapa.on("click", (e) => {
+      if (modoPlanRef.current) {
+        setPlanVisible(null);
+        setPuntosPlan((p) => [...p, [e.lngLat.lng, e.lngLat.lat]]);
+        return;
+      }
       const capas = [CAPA_ELEMENTOS, CAPA_RUTAS_PULSABLE].filter((c) =>
         mapa.getLayer(c),
       );
@@ -285,6 +350,10 @@ export default function MapView() {
     });
 
     mapaRef.current = mapa;
+    if (process.env.NODE_ENV !== "production") {
+      // Acceso al mapa desde la consola para depurar en desarrollo
+      (window as unknown as { __mapa?: maplibregl.Map }).__mapa = mapa;
+    }
     return () => {
       mapaRef.current = null;
       mapa.remove();
@@ -331,6 +400,170 @@ export default function MapView() {
       COLECCION_VACIA,
     );
   }, [rutaVista, cargado]);
+
+  // --- Planificador ---
+
+  // Calcula el segmento pendiente entre los dos últimos puntos marcados
+  useEffect(() => {
+    // Si al deshacer sobran segmentos (p. ej. con un enrutado en vuelo),
+    // se recortan antes de calcular nada
+    const esperados = Math.max(0, puntosPlan.length - 1);
+    if (segmentosPlan.length > esperados) {
+      setSegmentosPlan((s) => s.slice(0, esperados));
+      return;
+    }
+    if (puntosPlan.length - 1 <= segmentosPlan.length || enrutandoRef.current)
+      return;
+    const a = puntosPlan[segmentosPlan.length];
+    const b = puntosPlan[segmentosPlan.length + 1];
+    enrutandoRef.current = true;
+    setEnrutando(true);
+    (modoSenderos
+      ? segmentoAPie(a, b)
+      : Promise.resolve({ coords: [a, b] as [number, number][] })
+    )
+      .then(({ coords }) => setSegmentosPlan((s) => [...s, coords]))
+      .finally(() => {
+        enrutandoRef.current = false;
+        setEnrutando(false);
+      });
+  }, [puntosPlan, segmentosPlan, modoSenderos]);
+
+  const lineaPlan = useMemo(() => {
+    const linea: [number, number][] = [];
+    for (const seg of segmentosPlan)
+      linea.push(...(linea.length ? seg.slice(1) : seg));
+    return linea;
+  }, [segmentosPlan]);
+
+  // Métricas del borrador (elevación muestreada), con un pequeño debounce
+  useEffect(() => {
+    if (lineaPlan.length < 2) {
+      setMetricasPlan(null);
+      return;
+    }
+    let cancelado = false;
+    setMidiendo(true);
+    const temporizador = setTimeout(async () => {
+      try {
+        const metricas = await medirLinea(lineaPlan);
+        if (!cancelado) setMetricasPlan(metricas);
+      } catch {
+        if (!cancelado) setMetricasPlan(null);
+      } finally {
+        if (!cancelado) setMidiendo(false);
+      }
+    }, 400);
+    return () => {
+      cancelado = true;
+      clearTimeout(temporizador);
+    };
+  }, [lineaPlan]);
+
+  // Pinta borrador o plan guardado seleccionado
+  useEffect(() => {
+    const mapa = mapaRef.current;
+    if (!mapa || !cargado) return;
+    const linea = planVisible ? planVisible.linea : lineaPlan;
+    const puntos = planVisible ? planVisible.puntos : puntosPlan;
+    (mapa.getSource(CAPA_PLAN_LINEA) as maplibregl.GeoJSONSource).setData(
+      linea.length > 1
+        ? {
+            type: "Feature",
+            geometry: { type: "LineString", coordinates: linea },
+            properties: {},
+          }
+        : COLECCION_VACIA,
+    );
+    (mapa.getSource(CAPA_PLAN_PUNTOS) as maplibregl.GeoJSONSource).setData({
+      type: "FeatureCollection",
+      features: puntos.map((coord) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: coord },
+        properties: {},
+      })),
+    });
+  }, [lineaPlan, puntosPlan, planVisible, cargado]);
+
+  // Cursor de mira mientras se planifica
+  useEffect(() => {
+    modoPlanRef.current = modoPlan;
+    const mapa = mapaRef.current;
+    if (mapa) mapa.getCanvas().style.cursor = modoPlan ? "crosshair" : "";
+  }, [modoPlan]);
+
+  function alternarPlanificador() {
+    const activar = !modoPlan;
+    setModoPlan(activar);
+    if (activar) {
+      setSeleccion(null);
+      if (isFirebaseConfigured && planes === null) {
+        listarPlanes()
+          .then(setPlanes)
+          .catch(() => setPlanes([]));
+      }
+    } else {
+      limpiarBorrador();
+      setPlanVisible(null);
+    }
+  }
+
+  function limpiarBorrador() {
+    setPuntosPlan([]);
+    setSegmentosPlan([]);
+    setMetricasPlan(null);
+  }
+
+  function deshacerPunto() {
+    setPuntosPlan((p) => p.slice(0, -1));
+    setSegmentosPlan((s) =>
+      s.length >= puntosPlan.length - 1 ? s.slice(0, -1) : s,
+    );
+  }
+
+  async function guardarBorrador(nombre: string) {
+    if (!metricasPlan || lineaPlan.length < 2) return;
+    setGuardandoPlan(true);
+    try {
+      await guardarPlan({
+        nombre,
+        puntos: puntosPlan,
+        linea: lineaPlan,
+        metricas: metricasPlan,
+      });
+      const lista = await listarPlanes();
+      setPlanes(lista);
+      const guardada = lista.find((p) => p.nombre === nombre) ?? null;
+      setPlanVisible(guardada);
+      if (guardada) limpiarBorrador();
+    } finally {
+      setGuardandoPlan(false);
+    }
+  }
+
+  async function borrarPlanGuardado(id: string) {
+    await borrarPlan(id);
+    setPlanVisible((v) => (v?.id === id ? null : v));
+    setPlanes((lista) => lista?.filter((p) => p.id !== id) ?? lista);
+  }
+
+  function verPlan(plan: RutaPlaneada | null) {
+    setPlanVisible(plan);
+    if (plan) {
+      const mapa = mapaRef.current;
+      let [oeste, sur, este, norte] = [Infinity, Infinity, -Infinity, -Infinity];
+      for (const [lng, lat] of plan.linea) {
+        oeste = Math.min(oeste, lng);
+        este = Math.max(este, lng);
+        sur = Math.min(sur, lat);
+        norte = Math.max(norte, lat);
+      }
+      mapa?.fitBounds([oeste, sur, este, norte], {
+        padding: { top: 90, right: 90, bottom: 60, left: 400 },
+        duration: 900,
+      });
+    }
+  }
 
   function moverCursorPerfil(km: number | null) {
     const mapa = mapaRef.current;
@@ -479,14 +712,36 @@ export default function MapView() {
           })}
       </div>
 
+      {/* Planificador de rutas propias */}
+      {modoPlan && (
+        <Planificador
+          numPuntos={puntosPlan.length}
+          metricas={metricasPlan}
+          midiendo={midiendo}
+          enrutando={enrutando}
+          modoSenderos={modoSenderos}
+          onModoSenderos={setModoSenderos}
+          onDeshacer={deshacerPunto}
+          onLimpiar={limpiarBorrador}
+          onGuardar={guardarBorrador}
+          guardando={guardandoPlan}
+          firebaseListo={isFirebaseConfigured}
+          planes={planes}
+          planVisible={planVisible}
+          onVerPlan={verPlan}
+          onBorrarPlan={borrarPlanGuardado}
+          onCerrar={alternarPlanificador}
+        />
+      )}
+
       {/* Ficha de la selección */}
-      {seleccion?.clase === "elemento" && (
+      {!modoPlan && seleccion?.clase === "elemento" && (
         <FichaElemento
           elemento={seleccion.elemento}
           onCerrar={() => setSeleccion(null)}
         />
       )}
-      {rutaVista && (
+      {!modoPlan && rutaVista && (
         <FichaRuta
           ruta={rutaVista}
           invertida={sentidoInvertido}
@@ -533,6 +788,18 @@ export default function MapView() {
             onClick={alternarToponimos}
           >
             <IconoToponimo />
+          </BotonMapa>
+        </div>
+
+        <div className="flex flex-col overflow-hidden rounded-lg border border-roca-700 shadow-lg shadow-roca-950/60">
+          <BotonMapa
+            etiqueta={
+              modoPlan ? "Salir del planificador" : "Planificar ruta propia"
+            }
+            activo={modoPlan}
+            onClick={alternarPlanificador}
+          >
+            <IconoTrazar />
           </BotonMapa>
         </div>
       </div>

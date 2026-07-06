@@ -61,6 +61,36 @@ export function IconoInvertir(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Trazar una ruta propia: camino con puntos en los extremos. */
+export function IconoTrazar(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <path d="M5.5 18c4.5-1 2.5-6.5 7-7.5s4-4 6-5" />
+      <circle cx="5" cy="18.5" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="5" r="1.6" fill="currentColor" stroke="none" />
+    </Base>
+  );
+}
+
+/** Deshacer el último paso. */
+export function IconoDeshacer(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <path d="M8 5.5 4.5 9 8 12.5" />
+      <path d="M4.5 9h9.5a4.75 4.75 0 0 1 0 9.5H11" />
+    </Base>
+  );
+}
+
+/** Borrar. */
+export function IconoPapelera(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <path d="M5 7h14M10 7V5h4v2M7.5 7l.9 12h7.2l.9-12" />
+    </Base>
+  );
+}
+
 /** Cerrar paneles y fichas. */
 export function IconoCerrar(props: SVGProps<SVGSVGElement>) {
   return (

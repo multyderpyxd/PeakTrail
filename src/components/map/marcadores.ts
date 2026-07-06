@@ -49,6 +49,11 @@ const SVG_RUTA: Record<string, string> = {
     `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 13 13">` +
     `<circle cx="6.5" cy="6.5" r="4.6" fill="#3f92c9" stroke="#f6f4ee" stroke-width="1.6"/>` +
     `</svg>`,
+  // Puntos marcados al planificar una ruta propia
+  "plan-punto":
+    `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 13 13">` +
+    `<circle cx="6.5" cy="6.5" r="4.4" fill="#c99655" stroke="#16130f" stroke-width="1.5"/>` +
+    `</svg>`,
 };
 
 async function anadirImagen(
