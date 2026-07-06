@@ -56,6 +56,7 @@ import {
   type Realizado,
 } from "@/lib/realizados";
 import { Progreso } from "./Progreso";
+import { procesarRetornoStrava } from "@/lib/strava";
 
 const CAPA_ELEMENTOS = "elementos";
 const CAPA_RUTAS = "rutas";
@@ -164,6 +165,11 @@ export default function MapView() {
     }
     return escucharRealizados(setRealizados);
   }, [sesion.invitado]);
+
+  // Al volver del OAuth de Strava, guardar los tokens y abrir el progreso
+  useEffect(() => {
+    if (procesarRetornoStrava()) setVerProgreso(true);
+  }, []);
 
   const puedeMarcar = Boolean(sesion.usuario && sesion.invitado);
 
@@ -848,7 +854,9 @@ export default function MapView() {
         <Progreso
           realizados={realizados}
           usuario={sesion.usuario}
+          esInvitado={sesion.invitado}
           esAdmin={sesion.admin}
+          rutas={rutasRef.current}
           totalRutas={rutasRef.current?.size ?? 0}
           onCerrar={() => setVerProgreso(false)}
         />

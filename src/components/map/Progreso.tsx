@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
 import type { Realizado } from "@/lib/realizados";
 import { expulsar, invitar, listarInvitados, type Invitado } from "@/lib/invitados";
+import type { Ruta } from "@/types/rutas";
+import { SeccionStrava } from "./SeccionStrava";
 import { TOTALES } from "./elementos";
 import { COLOR_TIPO } from "./marcadores";
 import { IconoCerrar, IconoHecho, IconoPapelera } from "@/components/icons";
@@ -94,13 +96,17 @@ const FILAS_PERSONALES = [
 export function Progreso({
   realizados,
   usuario,
+  esInvitado,
   esAdmin,
+  rutas,
   totalRutas,
   onCerrar,
 }: {
   realizados: Map<string, Realizado>;
   usuario: User | null;
+  esInvitado: boolean;
   esAdmin: boolean;
+  rutas: Map<string, Ruta> | null;
   totalRutas: number;
   onCerrar: () => void;
 }) {
@@ -237,6 +243,10 @@ export function Progreso({
             </ol>
           )}
         </div>
+
+        {usuario && esInvitado && (
+          <SeccionStrava usuario={usuario} realizados={realizados} rutas={rutas} />
+        )}
 
         {esAdmin && usuario?.email && (
           <Invitaciones emailPropio={usuario.email.toLowerCase()} />

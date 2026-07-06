@@ -119,6 +119,15 @@ export function IconoHecho(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Actividad registrada (pulso de una traza). */
+export function IconoActividad(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <path d="M3 13h3.5L9 6.5 14 19l2.5-6H21" />
+    </Base>
+  );
+}
+
 /** Cerrar paneles y fichas. */
 export function IconoCerrar(props: SVGProps<SVGSVGElement>) {
   return (
