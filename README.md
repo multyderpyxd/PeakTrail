@@ -1,4 +1,4 @@
-# PeakTrail 🏔️
+# PeakTrail
 
 App de montañismo del Pirineo aragonés: ibones, tresmiles, refugios y rutas GR/PR/SL sobre un mapa 2.5D, para uso compartido con un grupo cerrado de amigos.
 

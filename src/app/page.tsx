@@ -11,11 +11,14 @@ export default function Home() {
         Ibones, tresmiles, refugios y rutas del Pirineo aragonés en un mapa
         2.5D. En construcción — Hito 0 completado.
       </p>
-      <div className="flex gap-3 text-sm text-slate-500">
-        <span>⛰️ Tresmiles</span>
-        <span>💧 Ibones</span>
-        <span>🏠 Refugios</span>
-        <span>🥾 Rutas GR/PR/SL</span>
+      <div className="flex gap-4 text-sm uppercase tracking-widest text-slate-500">
+        <span>Tresmiles</span>
+        <span aria-hidden="true">·</span>
+        <span>Ibones</span>
+        <span aria-hidden="true">·</span>
+        <span>Refugios</span>
+        <span aria-hidden="true">·</span>
+        <span>Rutas GR / PR / SL</span>
       </div>
     </main>
   );
