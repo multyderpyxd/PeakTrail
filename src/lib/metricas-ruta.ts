@@ -17,7 +17,13 @@ export function tiempoEstimadoHoras(perfil: [number, number][]): number {
   for (let i = 1; i < perfil.length; i++) {
     const dxKm = perfil[i][0] - perfil[i - 1][0];
     if (dxKm <= 0) continue;
-    const pendiente = (perfil[i][1] - perfil[i - 1][1]) / 1000 / dxKm;
+    // Pendiente acotada a ±50%: los saltos de altitud entre tramos
+    // discontinuos del trazado darían velocidades casi nulas y el
+    // tiempo se dispararía (p. ej. 6,6e+29 h)
+    const pendiente = Math.max(
+      -0.5,
+      Math.min(0.5, (perfil[i][1] - perfil[i - 1][1]) / 1000 / dxKm),
+    );
     horas += dxKm / velocidadTobler(pendiente);
   }
   return horas;
