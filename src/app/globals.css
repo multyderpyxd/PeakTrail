@@ -1,11 +1,69 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens de PeakTrail — paleta inspirada en el Pirineo aragonés.
+ * roca:  grises cálidos de caliza y granito (fondos y superficies de UI)
+ * hielo: azules pálidos de ibón y neveros (texto sobre oscuro, acentos fríos)
+ * pino:  verdes profundos de pinar de montaña (acento primario)
+ * ocre:  tierras y lastonares de otoño (acento cálido, estados activos)
+ * nieve: blanco roto de nieve vieja (texto principal sobre roca)
+ */
+@theme {
+  --color-roca-950: #16130f;
+  --color-roca-900: #221e18;
+  --color-roca-800: #322c24;
+  --color-roca-700: #453d32;
+  --color-roca-500: #6e6353;
+  --color-roca-300: #a2967f;
+
+  --color-hielo-100: #eff5f7;
+  --color-hielo-200: #dce9ee;
+  --color-hielo-300: #bdd5de;
+  --color-hielo-500: #7fa8b8;
+
+  --color-pino-700: #24402f;
+  --color-pino-500: #3c6a4c;
+  --color-pino-300: #7ba488;
+
+  --color-ocre-600: #a06c35;
+  --color-ocre-400: #c99655;
+  --color-ocre-200: #e8cfa4;
+
+  --color-nieve: #f6f4ee;
+
+  --font-sans: var(--font-archivo), system-ui, sans-serif;
+  --font-display: var(--font-fraunces), Georgia, serif;
+}
+
 :root {
-  --background: #0c1220;
-  --foreground: #e8ecf4;
+  --background: var(--color-roca-950);
+  --foreground: var(--color-nieve);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+/* Ajustes del cromo de MapLibre para integrarlo en la paleta */
+.maplibregl-ctrl-attrib {
+  background: color-mix(in srgb, var(--color-roca-950) 82%, transparent);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.maplibregl-ctrl-attrib,
+.maplibregl-ctrl-attrib a {
+  color: var(--color-hielo-300);
+}
+
+.maplibregl-ctrl-scale {
+  background: color-mix(in srgb, var(--color-roca-950) 72%, transparent);
+  border: 1px solid var(--color-hielo-500);
+  border-top: none;
+  color: var(--color-hielo-200);
+  font-family: var(--font-sans);
+  font-size: 10px;
 }

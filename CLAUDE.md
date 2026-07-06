@@ -5,8 +5,9 @@ App de montañismo del Pirineo aragonés (ibones, tresmiles, refugios, rutas GR/
 ## Estado
 
 - **Hito 0 completado**: Next.js 15 (App Router) + TypeScript + TailwindCSS 4, SDK de Firebase integrado (`src/lib/firebase.ts`, inicialización condicionada a env vars), devcontainer para Codespaces.
+- **Hito 1 completado**: mapa 2.5D con MapLibre GL JS (`src/components/map/`): ortofoto PNOA y topónimos IGNBaseOrto vía WMTS del IGN, terreno 3D con teselas terrarium de Mapzen/AWS (EU-DEM/SRTM; cambiar por tubería propia MDT05 → terrain-RGB si se quiere más resolución), hillshade, cielo/niebla, controles propios (zoom, brújula, 2D/3D, topónimos) y atribución visible. Design tokens de la paleta Pirineo en `globals.css` (@theme de Tailwind 4), tipografía Fraunces + Archivo, set de iconos propio en `src/components/icons.tsx`.
 - **Pendiente del Hito 0** (requiere cuentas del usuario): crear proyecto Firebase y rellenar `.env.local` (plantilla en `.env.example`); importar el repo en Vercel.
-- **Siguiente**: Hito 1 — mapa 2.5D con MapLibre GL JS + terreno del IGN (PNOA + MDT).
+- **Siguiente**: Hito 2 — modelo de datos en Firestore y catálogo inicial de elementos (requiere el proyecto Firebase creado).
 
 ## Comandos
 

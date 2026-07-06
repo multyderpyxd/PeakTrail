@@ -1,5 +1,17 @@
 import type { Metadata } from "next";
+import { Archivo, Fraunces } from "next/font/google";
 import "./globals.css";
+
+const archivo = Archivo({
+  subsets: ["latin"],
+  variable: "--font-archivo",
+});
+
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-fraunces",
+  axes: ["opsz"],
+});
 
 export const metadata: Metadata = {
   title: "PeakTrail — Pirineo Aragonés",
@@ -13,7 +25,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es">
+    <html lang="es" className={`${archivo.variable} ${fraunces.variable}`}>
       <body className="antialiased">{children}</body>
     </html>
   );
