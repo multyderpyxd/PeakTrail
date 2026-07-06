@@ -56,6 +56,24 @@ function haversine([lng1, lat1]: [number, number], [lng2, lat2]: [number, number
   return 2 * R_TIERRA * Math.asin(Math.sqrt(a));
 }
 
+/**
+ * Vista de la ruta en sentido contrario: trazado recorrido al revés, perfil
+ * volteado horizontalmente y desniveles intercambiados. El id se conserva
+ * (es la misma ruta, solo cambia el sentido de la lectura).
+ */
+export function invertirRuta(ruta: Ruta): Ruta {
+  const kmMax = ruta.perfil[ruta.perfil.length - 1][0];
+  return {
+    ...ruta,
+    desnivelPos: ruta.desnivelNeg,
+    desnivelNeg: ruta.desnivelPos,
+    perfil: [...ruta.perfil]
+      .reverse()
+      .map(([km, ele]) => [+(kmMax - km).toFixed(2), ele]),
+    partes: [...ruta.partes].reverse().map((parte) => [...parte].reverse()),
+  };
+}
+
 /** Salida y llegada de la ruta (primer y último punto del trazado). */
 export function extremosRuta(ruta: Ruta): FeatureCollection<Point> {
   const primera = ruta.partes[0];

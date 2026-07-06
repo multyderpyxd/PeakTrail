@@ -32,15 +32,17 @@ function svgMarcador(tipo: keyof typeof COLOR_TIPO): string {
  * serie del gráfico). Mismo lenguaje de trazo que el resto del set.
  */
 const SVG_RUTA: Record<string, string> = {
+  // Fondo claro (hielo) y glifo oscuro: destacan aunque caigan encima de un
+  // marcador oscuro del catálogo (cima, refugio...) en la salida o la llegada
   "ruta-inicio":
     `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 22 22">` +
-    `<circle cx="11" cy="11" r="8" fill="#16130f" fill-opacity="0.88" stroke="#f6f4ee" stroke-width="1.9"/>` +
-    `<circle cx="11" cy="11" r="2.6" fill="#f6f4ee"/>` +
+    `<circle cx="11" cy="11" r="8" fill="#dce9ee" stroke="#16130f" stroke-width="1.6"/>` +
+    `<circle cx="11" cy="11" r="2.8" fill="#16130f"/>` +
     `</svg>`,
   "ruta-fin":
     `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 22 22">` +
-    `<circle cx="11" cy="11" r="8" fill="#16130f" fill-opacity="0.88" stroke="#f6f4ee" stroke-width="1.9"/>` +
-    `<g fill="none" stroke="#f6f4ee" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">` +
+    `<circle cx="11" cy="11" r="8" fill="#dce9ee" stroke="#16130f" stroke-width="1.6"/>` +
+    `<g fill="none" stroke="#16130f" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">` +
     `<path d="M8 15.5V6.5"/><path d="M8 6.5h6.5l-1.8 2.2 1.8 2.2H8"/>` +
     `</g></svg>`,
   "ruta-cursor":

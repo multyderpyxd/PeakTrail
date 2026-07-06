@@ -51,6 +51,16 @@ export function IconoCollado(props: SVGProps<SVGSVGElement>) {
   return <Base {...props}>{trazos("collado")}</Base>;
 }
 
+/** Intercambiar sentido: dos flechas opuestas. */
+export function IconoInvertir(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <path d="M4.5 9h14M15.3 5.8 18.5 9l-3.2 3.2" />
+      <path d="M19.5 15H5.5M8.7 18.2 5.5 15l3.2-3.2" />
+    </Base>
+  );
+}
+
 /** Cerrar paneles y fichas. */
 export function IconoCerrar(props: SVGProps<SVGSVGElement>) {
   return (
