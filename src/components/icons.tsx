@@ -1,4 +1,5 @@
 import type { SVGProps } from "react";
+import { TRAZOS } from "./iconos-trazos";
 
 /*
  * Set de iconos propio de PeakTrail.
@@ -26,12 +27,35 @@ function Base({ children, ...props }: SVGProps<SVGSVGElement>) {
   );
 }
 
+function trazos(tipo: keyof typeof TRAZOS) {
+  return TRAZOS[tipo].map((d) => <path key={d} d={d} />);
+}
+
 /** Marca de PeakTrail: dos cimas con línea de nieve en la mayor. */
 export function IconoPico(props: SVGProps<SVGSVGElement>) {
+  return <Base {...props}>{trazos("pico")}</Base>;
+}
+
+/** Lámina de agua de un ibón. */
+export function IconoIbon(props: SVGProps<SVGSVGElement>) {
+  return <Base {...props}>{trazos("ibon")}</Base>;
+}
+
+/** Refugio de montaña. */
+export function IconoRefugio(props: SVGProps<SVGSVGElement>) {
+  return <Base {...props}>{trazos("refugio")}</Base>;
+}
+
+/** Collado entre dos vertientes. */
+export function IconoCollado(props: SVGProps<SVGSVGElement>) {
+  return <Base {...props}>{trazos("collado")}</Base>;
+}
+
+/** Cerrar paneles y fichas. */
+export function IconoCerrar(props: SVGProps<SVGSVGElement>) {
   return (
     <Base {...props}>
-      <path d="M2.5 19h19L14.8 5.2 11.6 11l-3-4.6L2.5 19Z" />
-      <path d="m13.3 8.4 1.2 1.6 1.3-1.7" />
+      <path d="m6.5 6.5 11 11m0-11-11 11" />
     </Base>
   );
 }
