@@ -16,16 +16,25 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/invitados/$(request.auth.token.email));
     }
 
+    // Los admins (campo admin: true en su propio doc de invitados) pueden
+    // gestionar la lista desde la app
+    function esAdmin() {
+      return autenticado() &&
+        get(/databases/$(database)/documents/invitados/$(request.auth.token.email)).data.admin == true;
+    }
+
     // Catálogo: lectura pública, escritura solo por importación (consola/scripts con reglas abiertas)
     match /elementos/{id} {
       allow read: if true;
       allow write: if false;
     }
 
-    // Cada usuario solo puede comprobar su propia invitación
+    // Cada usuario puede comprobar su propia invitación; los admins
+    // pueden listar, invitar y expulsar (nunca borrarse a sí mismos)
     match /invitados/{email} {
-      allow read: if autenticado() && request.auth.token.email == email;
-      allow write: if false;
+      allow read: if esAdmin() || (autenticado() && request.auth.token.email == email);
+      allow create, update: if esAdmin();
+      allow delete: if esAdmin() && request.auth.token.email != email;
     }
 
     // Rutas planificadas: compartidas dentro del grupo

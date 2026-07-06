@@ -848,6 +848,7 @@ export default function MapView() {
         <Progreso
           realizados={realizados}
           usuario={sesion.usuario}
+          esAdmin={sesion.admin}
           totalRutas={rutasRef.current?.size ?? 0}
           onCerrar={() => setVerProgreso(false)}
         />

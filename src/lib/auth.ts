@@ -16,6 +16,8 @@ export interface EstadoUsuario {
   usuario: User | null;
   /** true si su correo está en la lista cerrada (colección `invitados`). */
   invitado: boolean;
+  /** true si puede gestionar la lista de invitados desde la app. */
+  admin: boolean;
 }
 
 /** Sesión actual y pertenencia al grupo, reactiva a entradas/salidas. */
@@ -24,24 +26,28 @@ export function useUsuario(): EstadoUsuario {
     cargando: isFirebaseConfigured,
     usuario: null,
     invitado: false,
+    admin: false,
   });
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
     return onAuthStateChanged(getFirebaseAuth(), async (usuario) => {
       if (!usuario?.email) {
-        setEstado({ cargando: false, usuario: null, invitado: false });
+        setEstado({ cargando: false, usuario: null, invitado: false, admin: false });
         return;
       }
       let invitado = false;
+      let admin = false;
       try {
-        invitado = (
-          await getDoc(doc(getDb(), "invitados", usuario.email.toLowerCase()))
-        ).exists();
+        const ficha = await getDoc(
+          doc(getDb(), "invitados", usuario.email.toLowerCase()),
+        );
+        invitado = ficha.exists();
+        admin = ficha.data()?.admin === true;
       } catch {
         // sin permiso o sin red: se queda como no invitado
       }
-      setEstado({ cargando: false, usuario, invitado });
+      setEstado({ cargando: false, usuario, invitado, admin });
     });
   }, []);
 

@@ -5,14 +5,18 @@
  * gestiona los invitados desde la consola de Firebase.
  *
  * Uso: npm run invitados:anadir -- amigo@gmail.com [otro@gmail.com ...]
+ *      npm run invitados:anadir -- --admin yo@gmail.com   (con rol admin:
+ *      puede invitar y expulsar desde la propia app)
  */
 
 import { initializeApp } from "firebase/app";
 import { doc, getFirestore, serverTimestamp, setDoc, terminate } from "firebase/firestore";
 
-const correos = process.argv.slice(2).filter((c) => c.includes("@"));
+const argumentos = process.argv.slice(2);
+const comoAdmin = argumentos.includes("--admin");
+const correos = argumentos.filter((c) => c.includes("@"));
 if (!correos.length) {
-  console.error("Uso: npm run invitados:anadir -- email1 [email2 ...]");
+  console.error("Uso: npm run invitados:anadir -- [--admin] email1 [email2 ...]");
   process.exit(1);
 }
 
@@ -28,9 +32,11 @@ const db = getFirestore(
 );
 
 for (const correo of correos) {
-  await setDoc(doc(db, "invitados", correo.toLowerCase()), {
-    invitadoEl: serverTimestamp(),
-  });
-  console.log("Invitado:", correo.toLowerCase());
+  await setDoc(
+    doc(db, "invitados", correo.toLowerCase()),
+    { invitadoEl: serverTimestamp(), ...(comoAdmin && { admin: true }) },
+    { merge: true },
+  );
+  console.log(comoAdmin ? "Invitado (admin):" : "Invitado:", correo.toLowerCase());
 }
 await terminate(db);

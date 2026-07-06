@@ -1,9 +1,89 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
 import type { Realizado } from "@/lib/realizados";
+import { expulsar, invitar, listarInvitados, type Invitado } from "@/lib/invitados";
 import { TOTALES } from "./elementos";
 import { COLOR_TIPO } from "./marcadores";
-import { IconoCerrar, IconoHecho } from "@/components/icons";
+import { IconoCerrar, IconoHecho, IconoPapelera } from "@/components/icons";
+
+function Invitaciones({ emailPropio }: { emailPropio: string }) {
+  const [invitados, setInvitados] = useState<Invitado[] | null>(null);
+  const [correo, setCorreo] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    listarInvitados().then(setInvitados).catch(() => setError(true));
+  }, []);
+
+  async function anadir(e: React.FormEvent) {
+    e.preventDefault();
+    const email = correo.trim().toLowerCase();
+    if (!email.includes("@") || ocupado) return;
+    setOcupado(true);
+    try {
+      await invitar(email);
+      setCorreo("");
+      setInvitados(await listarInvitados());
+    } catch {
+      setError(true);
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  return (
+    <div className="border-t border-roca-800 pt-3">
+      <h3 className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
+        Invitaciones
+      </h3>
+      {error && (
+        <p className="mt-2 text-xs text-ocre-400">
+          No se pudo acceder a la lista (¿permisos de las reglas?).
+        </p>
+      )}
+      <ul className="mt-2 space-y-1">
+        {invitados?.map((inv) => (
+          <li key={inv.email} className="flex items-center gap-2 text-xs">
+            <span className="min-w-0 flex-1 truncate text-hielo-200">
+              {inv.email}
+              {inv.admin && <span className="ml-1.5 text-roca-300">admin</span>}
+            </span>
+            {inv.email !== emailPropio && (
+              <button
+                type="button"
+                aria-label={`Expulsar a ${inv.email}`}
+                onClick={async () => {
+                  await expulsar(inv.email).catch(() => setError(true));
+                  setInvitados(await listarInvitados().catch(() => invitados));
+                }}
+                className="p-1 text-roca-400 transition-colors hover:text-nieve"
+              >
+                <IconoPapelera width={13} height={13} />
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <form onSubmit={anadir} className="mt-2 flex gap-2">
+        <input
+          type="email"
+          value={correo}
+          onChange={(e) => setCorreo(e.target.value)}
+          placeholder="correo@ejemplo.com"
+          className="min-w-0 flex-1 rounded border border-roca-700 bg-roca-900/70 px-2 py-1 text-xs text-nieve placeholder:text-roca-500 focus:border-ocre-600 focus:outline-none"
+        />
+        <button
+          type="submit"
+          disabled={ocupado}
+          className="rounded bg-ocre-600 px-2.5 py-1 text-xs text-roca-950 transition-colors hover:bg-ocre-400 disabled:opacity-40"
+        >
+          Invitar
+        </button>
+      </form>
+    </div>
+  );
+}
 
 const FILAS_PERSONALES = [
   { categoria: "pico", etiqueta: "Tresmiles" },
@@ -14,11 +94,13 @@ const FILAS_PERSONALES = [
 export function Progreso({
   realizados,
   usuario,
+  esAdmin,
   totalRutas,
   onCerrar,
 }: {
   realizados: Map<string, Realizado>;
   usuario: User | null;
+  esAdmin: boolean;
   totalRutas: number;
   onCerrar: () => void;
 }) {
@@ -155,6 +237,10 @@ export function Progreso({
             </ol>
           )}
         </div>
+
+        {esAdmin && usuario?.email && (
+          <Invitaciones emailPropio={usuario.email.toLowerCase()} />
+        )}
       </div>
     </section>
   );
