@@ -22,7 +22,14 @@ function ticksRedondos(min: number, max: number, n: number): number[] {
   return ticks.length ? ticks : [min, max];
 }
 
-export function PerfilElevacion({ perfil }: { perfil: [number, number][] }) {
+export function PerfilElevacion({
+  perfil,
+  onPunto,
+}: {
+  perfil: [number, number][];
+  /** Avisa del km bajo el cursor (null al salir) para reflejarlo en el mapa. */
+  onPunto?: (km: number | null) => void;
+}) {
   const [indice, setIndice] = useState<number | null>(null);
 
   const kmMax = perfil[perfil.length - 1][0];
@@ -56,6 +63,12 @@ export function PerfilElevacion({ perfil }: { perfil: [number, number][] }) {
         mejor = i;
     }
     setIndice(mejor);
+    onPunto?.(perfil[mejor][0]);
+  }
+
+  function alSalir() {
+    setIndice(null);
+    onPunto?.(null);
   }
 
   const punto = indice !== null ? perfil[indice] : null;
@@ -68,7 +81,7 @@ export function PerfilElevacion({ perfil }: { perfil: [number, number][] }) {
         role="img"
         aria-label={`Perfil de elevación: de ${eleMin} a ${eleMax} metros a lo largo de ${kmMax} kilómetros`}
         onPointerMove={alMover}
-        onPointerLeave={() => setIndice(null)}
+        onPointerLeave={alSalir}
       >
         {ticksY.map((v) => (
           <g key={v}>

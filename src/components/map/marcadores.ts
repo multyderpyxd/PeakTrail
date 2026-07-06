@@ -26,14 +26,47 @@ function svgMarcador(tipo: keyof typeof COLOR_TIPO): string {
   );
 }
 
+/**
+ * Señales minimalistas de la ruta seleccionada: punto de salida, banderín de
+ * llegada y el cursor que sigue al perfil de elevación (mismo azul de la
+ * serie del gráfico). Mismo lenguaje de trazo que el resto del set.
+ */
+const SVG_RUTA: Record<string, string> = {
+  "ruta-inicio":
+    `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 22 22">` +
+    `<circle cx="11" cy="11" r="8" fill="#16130f" fill-opacity="0.88" stroke="#f6f4ee" stroke-width="1.9"/>` +
+    `<circle cx="11" cy="11" r="2.6" fill="#f6f4ee"/>` +
+    `</svg>`,
+  "ruta-fin":
+    `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 22 22">` +
+    `<circle cx="11" cy="11" r="8" fill="#16130f" fill-opacity="0.88" stroke="#f6f4ee" stroke-width="1.9"/>` +
+    `<g fill="none" stroke="#f6f4ee" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">` +
+    `<path d="M8 15.5V6.5"/><path d="M8 6.5h6.5l-1.8 2.2 1.8 2.2H8"/>` +
+    `</g></svg>`,
+  "ruta-cursor":
+    `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 13 13">` +
+    `<circle cx="6.5" cy="6.5" r="4.6" fill="#3f92c9" stroke="#f6f4ee" stroke-width="1.6"/>` +
+    `</svg>`,
+};
+
+async function anadirImagen(
+  mapa: maplibregl.Map,
+  nombre: string,
+  svg: string,
+): Promise<void> {
+  const imagen = new Image();
+  imagen.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  await imagen.decode();
+  mapa.addImage(nombre, imagen, { pixelRatio: 2 });
+}
+
 export async function cargarIconosMapa(mapa: maplibregl.Map): Promise<void> {
-  await Promise.all(
-    TIPOS_MARCADOR.map(async (tipo) => {
-      const imagen = new Image(68, 68);
-      imagen.src =
-        "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgMarcador(tipo));
-      await imagen.decode();
-      mapa.addImage(`marcador-${tipo}`, imagen, { pixelRatio: 2 });
-    }),
-  );
+  await Promise.all([
+    ...TIPOS_MARCADOR.map((tipo) =>
+      anadirImagen(mapa, `marcador-${tipo}`, svgMarcador(tipo)),
+    ),
+    ...Object.entries(SVG_RUTA).map(([nombre, svg]) =>
+      anadirImagen(mapa, nombre, svg),
+    ),
+  ]);
 }

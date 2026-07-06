@@ -27,7 +27,9 @@ import {
   coleccionRutas,
   COLOR_RED,
   ETIQUETA_RED,
+  extremosRuta,
   limitesRuta,
+  puntoEnRuta,
 } from "./rutas";
 import { FichaElemento } from "./FichaElemento";
 import { FichaRuta } from "./FichaRuta";
@@ -37,6 +39,13 @@ const CAPA_RUTAS = "rutas";
 const CAPA_RUTAS_CASCO = "rutas-casco";
 const CAPA_RUTAS_PULSABLE = "rutas-pulsable";
 const CAPA_RUTA_DESTACADA = "ruta-destacada";
+const CAPA_RUTA_EXTREMOS = "ruta-extremos";
+const CAPA_RUTA_CURSOR = "ruta-cursor";
+
+const COLECCION_VACIA: GeoJSON.FeatureCollection = {
+  type: "FeatureCollection",
+  features: [],
+};
 
 type Seleccion =
   | { clase: "elemento"; elemento: ElementoGeografico }
@@ -195,6 +204,37 @@ export default function MapView() {
         },
       });
 
+      // Señales de la ruta seleccionada: salida/llegada y cursor del perfil,
+      // por encima de los marcadores del catálogo
+      mapa.addSource(CAPA_RUTA_EXTREMOS, {
+        type: "geojson",
+        data: COLECCION_VACIA,
+      });
+      mapa.addLayer({
+        id: CAPA_RUTA_EXTREMOS,
+        type: "symbol",
+        source: CAPA_RUTA_EXTREMOS,
+        layout: {
+          "icon-image": ["get", "rol"],
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
+      });
+      mapa.addSource(CAPA_RUTA_CURSOR, {
+        type: "geojson",
+        data: COLECCION_VACIA,
+      });
+      mapa.addLayer({
+        id: CAPA_RUTA_CURSOR,
+        type: "symbol",
+        source: CAPA_RUTA_CURSOR,
+        layout: {
+          "icon-image": "ruta-cursor",
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
+      });
+
       const totales: Record<RedRuta, number> = { gr: 0, pr: 0, sl: 0 };
       for (const ruta of rutas.values()) totales[ruta.red] += 1;
       setTotalesRutas(totales);
@@ -274,9 +314,35 @@ export default function MapView() {
   useEffect(() => {
     const mapa = mapaRef.current;
     if (!mapa || !cargado) return;
-    const id = seleccion?.clase === "ruta" ? seleccion.ruta.id : "";
-    mapa.setFilter(CAPA_RUTA_DESTACADA, ["==", ["get", "id"], id]);
+    const ruta = seleccion?.clase === "ruta" ? seleccion.ruta : null;
+    mapa.setFilter(CAPA_RUTA_DESTACADA, ["==", ["get", "id"], ruta?.id ?? ""]);
+    (mapa.getSource(CAPA_RUTA_EXTREMOS) as maplibregl.GeoJSONSource).setData(
+      ruta ? extremosRuta(ruta) : COLECCION_VACIA,
+    );
+    (mapa.getSource(CAPA_RUTA_CURSOR) as maplibregl.GeoJSONSource).setData(
+      COLECCION_VACIA,
+    );
   }, [seleccion, cargado]);
+
+  function moverCursorPerfil(km: number | null) {
+    const mapa = mapaRef.current;
+    const ruta = seleccion?.clase === "ruta" ? seleccion.ruta : null;
+    if (!mapa || !cargado || !ruta) return;
+    (mapa.getSource(CAPA_RUTA_CURSOR) as maplibregl.GeoJSONSource).setData(
+      km === null
+        ? COLECCION_VACIA
+        : {
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                geometry: { type: "Point", coordinates: puntoEnRuta(ruta, km) },
+                properties: {},
+              },
+            ],
+          },
+    );
+  }
 
   function alternarTipo(tipo: TipoElemento) {
     setTiposActivos((activos) => {
@@ -413,7 +479,11 @@ export default function MapView() {
         />
       )}
       {seleccion?.clase === "ruta" && (
-        <FichaRuta ruta={seleccion.ruta} onCerrar={() => setSeleccion(null)} />
+        <FichaRuta
+          ruta={seleccion.ruta}
+          onCerrar={() => setSeleccion(null)}
+          onCursorPerfil={moverCursorPerfil}
+        />
       )}
 
       {/* Controles de navegación */}

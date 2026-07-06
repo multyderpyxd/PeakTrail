@@ -17,9 +17,11 @@ function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
 export function FichaRuta({
   ruta,
   onCerrar,
+  onCursorPerfil,
 }: {
   ruta: Ruta;
   onCerrar: () => void;
+  onCursorPerfil?: (km: number | null) => void;
 }) {
   const color = COLOR_RED[ruta.red];
   const enlaceOsm = `https://www.openstreetmap.org/relation/${ruta.fuente.osmId}`;
@@ -70,7 +72,7 @@ export function FichaRuta({
         </dl>
 
         <div className="mt-3">
-          <PerfilElevacion perfil={ruta.perfil} />
+          <PerfilElevacion perfil={ruta.perfil} onPunto={onCursorPerfil} />
         </div>
 
         <p className="mt-2 text-xs text-roca-300">
