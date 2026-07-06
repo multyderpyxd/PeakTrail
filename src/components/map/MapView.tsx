@@ -19,11 +19,40 @@ import {
   IconoToponimo,
 } from "@/components/icons";
 import type { ElementoGeografico, TipoElemento } from "@/types/catalogo";
+import type { RedRuta, Ruta } from "@/types/rutas";
 import { coleccionElementos, elementosPorId, TOTALES } from "./elementos";
 import { cargarIconosMapa, COLOR_TIPO } from "./marcadores";
+import {
+  cargarRutas,
+  coleccionRutas,
+  COLOR_RED,
+  ETIQUETA_RED,
+  limitesRuta,
+} from "./rutas";
 import { FichaElemento } from "./FichaElemento";
+import { FichaRuta } from "./FichaRuta";
 
 const CAPA_ELEMENTOS = "elementos";
+const CAPA_RUTAS = "rutas";
+const CAPA_RUTAS_CASCO = "rutas-casco";
+const CAPA_RUTAS_PULSABLE = "rutas-pulsable";
+const CAPA_RUTA_DESTACADA = "ruta-destacada";
+
+type Seleccion =
+  | { clase: "elemento"; elemento: ElementoGeografico }
+  | { clase: "ruta"; ruta: Ruta };
+
+const EXPRESION_COLOR_RED: maplibregl.ExpressionSpecification = [
+  "match",
+  ["get", "red"],
+  "gr",
+  COLOR_RED.gr,
+  "pr",
+  COLOR_RED.pr,
+  "sl",
+  COLOR_RED.sl,
+  COLOR_RED.sl,
+];
 
 const FILTROS: {
   tipo: keyof typeof COLOR_TIPO;
@@ -70,14 +99,22 @@ export default function MapView() {
   const [rumbo, setRumbo] = useState(VISTA_INICIAL.bearing);
   const [inclinacion, setInclinacion] = useState(VISTA_INICIAL.pitch);
   const [toponimos, setToponimos] = useState(true);
-  const [seleccionado, setSeleccionado] = useState<ElementoGeografico | null>(
-    null,
-  );
+  const [seleccion, setSeleccion] = useState<Seleccion | null>(null);
   const [tiposActivos, setTiposActivos] = useState<TipoElemento[]>([
     "pico",
     "ibon",
     "refugio",
   ]);
+  const [redesActivas, setRedesActivas] = useState<RedRuta[]>([
+    "gr",
+    "pr",
+    "sl",
+  ]);
+  const [totalesRutas, setTotalesRutas] = useState<Record<
+    RedRuta,
+    number
+  > | null>(null);
+  const rutasRef = useRef<Map<string, Ruta> | null>(null);
 
   useEffect(() => {
     if (!contenedorRef.current) return;
@@ -104,6 +141,44 @@ export default function MapView() {
 
     mapa.on("load", async () => {
       await cargarIconosMapa(mapa);
+
+      // Rutas: líneas bajo los marcadores, con casco oscuro para que se lean
+      // sobre la ortofoto y una capa ancha invisible que facilita el clic
+      const rutas = await cargarRutas();
+      rutasRef.current = rutas;
+      mapa.addSource(CAPA_RUTAS, {
+        type: "geojson",
+        data: coleccionRutas(rutas.values()),
+      });
+      mapa.addLayer({
+        id: CAPA_RUTAS_CASCO,
+        type: "line",
+        source: CAPA_RUTAS,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": "#16130f", "line-width": 4, "line-opacity": 0.55 },
+      });
+      mapa.addLayer({
+        id: CAPA_RUTA_DESTACADA,
+        type: "line",
+        source: CAPA_RUTAS,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": "#f6f4ee", "line-width": 7, "line-opacity": 0.6 },
+        filter: ["==", ["get", "id"], ""],
+      });
+      mapa.addLayer({
+        id: CAPA_RUTAS,
+        type: "line",
+        source: CAPA_RUTAS,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": EXPRESION_COLOR_RED, "line-width": 2.2 },
+      });
+      mapa.addLayer({
+        id: CAPA_RUTAS_PULSABLE,
+        type: "line",
+        source: CAPA_RUTAS,
+        paint: { "line-color": "#000000", "line-width": 14, "line-opacity": 0.01 },
+      });
+
       mapa.addSource(CAPA_ELEMENTOS, {
         type: "geojson",
         data: coleccionElementos(),
@@ -119,27 +194,47 @@ export default function MapView() {
           "symbol-sort-key": ["-", 4000, ["coalesce", ["get", "altitud"], 0]],
         },
       });
+
+      const totales: Record<RedRuta, number> = { gr: 0, pr: 0, sl: 0 };
+      for (const ruta of rutas.values()) totales[ruta.red] += 1;
+      setTotalesRutas(totales);
       setCargado(true);
     });
 
     mapa.on("click", (e) => {
-      const [marcador] = mapa.queryRenderedFeatures(e.point, {
-        layers: mapa.getLayer(CAPA_ELEMENTOS) ? [CAPA_ELEMENTOS] : [],
-      });
-      const elemento = marcador
-        ? elementosPorId.get(String(marcador.properties.id))
-        : undefined;
-      setSeleccionado(elemento ?? null);
-      if (elemento) {
+      const capas = [CAPA_ELEMENTOS, CAPA_RUTAS_PULSABLE].filter((c) =>
+        mapa.getLayer(c),
+      );
+      // queryRenderedFeatures devuelve primero lo pintado más arriba:
+      // los marcadores tienen prioridad sobre las rutas
+      const [pulsado] = mapa.queryRenderedFeatures(e.point, { layers: capas });
+      if (!pulsado) {
+        setSeleccion(null);
+        return;
+      }
+      if (pulsado.layer.id === CAPA_ELEMENTOS) {
+        const elemento = elementosPorId.get(String(pulsado.properties.id));
+        if (!elemento) return;
+        setSeleccion({ clase: "elemento", elemento });
         mapa.easeTo({ center: elemento.coordenadas, duration: 600 });
+      } else {
+        const ruta = rutasRef.current?.get(String(pulsado.properties.id));
+        if (!ruta) return;
+        setSeleccion({ clase: "ruta", ruta });
+        mapa.fitBounds(limitesRuta(ruta), {
+          padding: { top: 90, right: 90, bottom: 60, left: 400 },
+          duration: 900,
+        });
       }
     });
-    mapa.on("mouseenter", CAPA_ELEMENTOS, () => {
-      mapa.getCanvas().style.cursor = "pointer";
-    });
-    mapa.on("mouseleave", CAPA_ELEMENTOS, () => {
-      mapa.getCanvas().style.cursor = "";
-    });
+    for (const capa of [CAPA_ELEMENTOS, CAPA_RUTAS_PULSABLE]) {
+      mapa.on("mouseenter", capa, () => {
+        mapa.getCanvas().style.cursor = "pointer";
+      });
+      mapa.on("mouseleave", capa, () => {
+        mapa.getCanvas().style.cursor = "";
+      });
+    }
 
     mapa.on("move", () => {
       setRumbo(mapa.getBearing());
@@ -163,13 +258,49 @@ export default function MapView() {
     ]);
   }, [tiposActivos, cargado]);
 
+  useEffect(() => {
+    const mapa = mapaRef.current;
+    if (!mapa || !cargado) return;
+    const filtro: maplibregl.ExpressionSpecification = [
+      "in",
+      ["get", "red"],
+      ["literal", redesActivas],
+    ];
+    for (const capa of [CAPA_RUTAS, CAPA_RUTAS_CASCO, CAPA_RUTAS_PULSABLE]) {
+      mapa.setFilter(capa, filtro);
+    }
+  }, [redesActivas, cargado]);
+
+  useEffect(() => {
+    const mapa = mapaRef.current;
+    if (!mapa || !cargado) return;
+    const id = seleccion?.clase === "ruta" ? seleccion.ruta.id : "";
+    mapa.setFilter(CAPA_RUTA_DESTACADA, ["==", ["get", "id"], id]);
+  }, [seleccion, cargado]);
+
   function alternarTipo(tipo: TipoElemento) {
     setTiposActivos((activos) => {
       const nuevos = activos.includes(tipo)
         ? activos.filter((t) => t !== tipo)
         : [...activos, tipo];
-      setSeleccionado((sel) => (sel && !nuevos.includes(sel.tipo) ? null : sel));
+      setSeleccion((sel) =>
+        sel?.clase === "elemento" && !nuevos.includes(sel.elemento.tipo)
+          ? null
+          : sel,
+      );
       return nuevos;
+    });
+  }
+
+  function alternarRed(red: RedRuta) {
+    setRedesActivas((activas) => {
+      const nuevas = activas.includes(red)
+        ? activas.filter((r) => r !== red)
+        : [...activas, red];
+      setSeleccion((sel) =>
+        sel?.clase === "ruta" && !nuevas.includes(sel.ruta.red) ? null : sel,
+      );
+      return nuevas;
     });
   }
 
@@ -217,8 +348,8 @@ export default function MapView() {
         </div>
       </header>
 
-      {/* Filtros por tipo (también leyenda) */}
-      <div className="absolute left-4 top-22 flex gap-2">
+      {/* Filtros por tipo y por red de senderos (también leyenda) */}
+      <div className="absolute left-4 top-22 flex max-w-[calc(100vw-2rem)] flex-wrap gap-2">
         {FILTROS.map(({ tipo, etiqueta, Icono }) => {
           const activo = tiposActivos.includes(tipo);
           return (
@@ -243,14 +374,46 @@ export default function MapView() {
             </button>
           );
         })}
+        {totalesRutas &&
+          (Object.keys(ETIQUETA_RED) as RedRuta[]).map((red) => {
+            const activa = redesActivas.includes(red);
+            return (
+              <button
+                key={red}
+                type="button"
+                aria-pressed={activa}
+                onClick={() => alternarRed(red)}
+                className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                  activa
+                    ? "border-roca-700 bg-roca-950/85 text-nieve"
+                    : "border-roca-800 bg-roca-950/60 text-roca-500 hover:text-roca-300"
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className="h-1 w-4 rounded-full"
+                  style={{
+                    backgroundColor: activa ? COLOR_RED[red] : "#6e6353",
+                  }}
+                />
+                {ETIQUETA_RED[red]}
+                <span className={activa ? "text-hielo-300" : ""}>
+                  {totalesRutas[red]}
+                </span>
+              </button>
+            );
+          })}
       </div>
 
-      {/* Ficha del elemento seleccionado */}
-      {seleccionado && (
+      {/* Ficha de la selección */}
+      {seleccion?.clase === "elemento" && (
         <FichaElemento
-          elemento={seleccionado}
-          onCerrar={() => setSeleccionado(null)}
+          elemento={seleccion.elemento}
+          onCerrar={() => setSeleccion(null)}
         />
+      )}
+      {seleccion?.clase === "ruta" && (
+        <FichaRuta ruta={seleccion.ruta} onCerrar={() => setSeleccion(null)} />
       )}
 
       {/* Controles de navegación */}

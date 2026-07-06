@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "catalogo:generar": "node scripts/generar-catalogo.mjs",
+    "rutas:generar": "node scripts/generar-rutas.mjs",
     "catalogo:importar": "node --env-file=.env.local scripts/importar-firestore.mjs"
   },
   "dependencies": {
@@ -25,6 +26,7 @@
     "@types/react-dom": "^19.1.6",
     "eslint": "^9.29.0",
     "eslint-config-next": "^15.3.4",
+    "pngjs": "^7.0.0",
     "tailwindcss": "^4.1.11",
     "typescript": "^5.8.3"
   }
