@@ -91,6 +91,34 @@ export function IconoPapelera(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Usuario del grupo. */
+export function IconoUsuario(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <circle cx="12" cy="8.5" r="3.5" />
+      <path d="M5.5 19.5c1.2-3.4 3.6-5 6.5-5s5.3 1.6 6.5 5" />
+    </Base>
+  );
+}
+
+/** Progreso: cimas ascendentes conquistadas. */
+export function IconoProgreso(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <path d="M4 19.5v-5M9.5 19.5v-9M15 19.5V6.5M20 19.5V10" />
+    </Base>
+  );
+}
+
+/** Hecho / realizado. */
+export function IconoHecho(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <path d="m5 12.5 4.5 4.5L19 7" />
+    </Base>
+  );
+}
+
 /** Cerrar paneles y fichas. */
 export function IconoCerrar(props: SVGProps<SVGSVGElement>) {
   return (

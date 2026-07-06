@@ -6,8 +6,10 @@ import {
   midePorRuta,
   tiempoEstimadoHoras,
 } from "@/lib/metricas-ruta";
+import type { Realizado } from "@/lib/realizados";
 import { COLOR_RED, ETIQUETA_RED } from "./rutas";
 import { IconoCerrar, IconoInvertir } from "@/components/icons";
+import { MarcarRealizado } from "./MarcarRealizado";
 import { PerfilElevacion } from "./PerfilElevacion";
 
 function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
@@ -27,12 +29,20 @@ export function FichaRuta({
   onInvertir,
   onCerrar,
   onCursorPerfil,
+  realizado,
+  puedeMarcar,
+  onMarcar,
+  onDesmarcar,
 }: {
   ruta: Ruta;
   invertida: boolean;
   onInvertir: () => void;
   onCerrar: () => void;
   onCursorPerfil?: (km: number | null) => void;
+  realizado: Realizado | null;
+  puedeMarcar: boolean;
+  onMarcar: (fecha: string, notas: string) => Promise<void>;
+  onDesmarcar: () => Promise<void>;
 }) {
   const color = COLOR_RED[ruta.red];
   const enlaceOsm = `https://www.openstreetmap.org/relation/${ruta.fuente.osmId}`;
@@ -133,6 +143,13 @@ export function FichaRuta({
         <div className="mt-1">
           <PerfilElevacion perfil={ruta.perfil} onPunto={onCursorPerfil} />
         </div>
+
+        <MarcarRealizado
+          realizado={realizado}
+          puedeMarcar={puedeMarcar}
+          onMarcar={onMarcar}
+          onDesmarcar={onDesmarcar}
+        />
 
         <p className="mt-2 text-xs text-roca-300">
           Tiempo de marcha por la función de Tobler y MIDE estimados

@@ -248,6 +248,7 @@ export function Planificador({
                   {plan.nombre}
                   <span className="ml-2 text-xs text-roca-300">
                     {plan.distanciaKm.toLocaleString("es-ES")} km
+                    {plan.nombreUsuario ? ` · ${plan.nombreUsuario}` : ""}
                   </span>
                 </button>
                 <button

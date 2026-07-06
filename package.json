@@ -9,7 +9,8 @@
     "lint": "next lint",
     "catalogo:generar": "node scripts/generar-catalogo.mjs",
     "rutas:generar": "node scripts/generar-rutas.mjs",
-    "catalogo:importar": "node --env-file=.env.local scripts/importar-firestore.mjs"
+    "catalogo:importar": "node --env-file=.env.local scripts/importar-firestore.mjs",
+    "invitados:anadir": "node --env-file=.env.local scripts/invitar.mjs"
   },
   "dependencies": {
     "firebase": "^11.10.0",

@@ -6,6 +6,8 @@
 export interface RutaPlaneada {
   id: string;
   nombre: string;
+  /** Nombre visible de quien la creó; null en planes anteriores al Hito 7. */
+  nombreUsuario?: string | null;
   /** ISO 8601; null si el servidor aún no asignó la marca de tiempo. */
   creadaEl: string | null;
   /** Puntos marcados por el usuario. */

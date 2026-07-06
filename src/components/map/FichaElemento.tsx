@@ -1,5 +1,7 @@
 import type { ElementoGeografico, TipoElemento } from "@/types/catalogo";
+import type { Realizado } from "@/lib/realizados";
 import { COLOR_TIPO } from "./marcadores";
+import { MarcarRealizado } from "./MarcarRealizado";
 import { IconoCerrar, IconoIbon, IconoPico, IconoRefugio } from "@/components/icons";
 
 const ETIQUETA_TIPO: Record<TipoElemento, string> = {
@@ -22,9 +24,17 @@ function coordenadaLegible(valor: number, ejes: [string, string]) {
 export function FichaElemento({
   elemento,
   onCerrar,
+  realizado,
+  puedeMarcar,
+  onMarcar,
+  onDesmarcar,
 }: {
   elemento: ElementoGeografico;
   onCerrar: () => void;
+  realizado: Realizado | null;
+  puedeMarcar: boolean;
+  onMarcar: (fecha: string, notas: string) => Promise<void>;
+  onDesmarcar: () => Promise<void>;
 }) {
   const color =
     COLOR_TIPO[elemento.tipo as keyof typeof COLOR_TIPO] ?? "#c99655";
@@ -96,6 +106,12 @@ export function FichaElemento({
             </>
           )}
         </p>
+        <MarcarRealizado
+          realizado={realizado}
+          puedeMarcar={puedeMarcar}
+          onMarcar={onMarcar}
+          onDesmarcar={onDesmarcar}
+        />
       </div>
     </section>
   );

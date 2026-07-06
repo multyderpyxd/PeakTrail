@@ -15,9 +15,11 @@ import {
   IconoMenos,
   IconoPico,
   IconoRefugio,
+  IconoProgreso,
   IconoRelieve,
   IconoToponimo,
   IconoTrazar,
+  IconoUsuario,
 } from "@/components/icons";
 import type { ElementoGeografico, TipoElemento } from "@/types/catalogo";
 import type { RedRuta, Ruta } from "@/types/rutas";
@@ -45,6 +47,15 @@ import {
   listarPlanes,
 } from "@/lib/planes";
 import type { RutaPlaneada } from "@/types/plan";
+import { entrar, salir, useUsuario } from "@/lib/auth";
+import {
+  desmarcarRealizado,
+  escucharRealizados,
+  idRealizado,
+  marcarRealizado,
+  type Realizado,
+} from "@/lib/realizados";
+import { Progreso } from "./Progreso";
 
 const CAPA_ELEMENTOS = "elementos";
 const CAPA_RUTAS = "rutas";
@@ -138,6 +149,50 @@ export default function MapView() {
   const [guardandoPlan, setGuardandoPlan] = useState(false);
   const [planes, setPlanes] = useState<RutaPlaneada[] | null>(null);
   const [planVisible, setPlanVisible] = useState<RutaPlaneada | null>(null);
+
+  // Sesión, registro de realizados del grupo y panel de progreso
+  const sesion = useUsuario();
+  const [realizados, setRealizados] = useState<Map<string, Realizado>>(
+    new Map(),
+  );
+  const [verProgreso, setVerProgreso] = useState(false);
+
+  useEffect(() => {
+    if (!sesion.invitado) {
+      setRealizados(new Map());
+      return;
+    }
+    return escucharRealizados(setRealizados);
+  }, [sesion.invitado]);
+
+  const puedeMarcar = Boolean(sesion.usuario && sesion.invitado);
+
+  function realizadoDe(tipo: Realizado["tipo"], refId: string) {
+    if (!sesion.usuario) return null;
+    return realizados.get(idRealizado(sesion.usuario.uid, tipo, refId)) ?? null;
+  }
+
+  async function marcar(
+    tipo: Realizado["tipo"],
+    refId: string,
+    nombre: string,
+    categoria: string,
+    fecha: string,
+    notas: string,
+  ) {
+    if (!sesion.usuario) return;
+    await marcarRealizado({
+      usuario: sesion.usuario.uid,
+      nombreUsuario:
+        sesion.usuario.displayName ?? sesion.usuario.email ?? "Anónimo",
+      tipo,
+      refId,
+      nombre,
+      categoria,
+      fecha,
+      notas,
+    });
+  }
   const [tiposActivos, setTiposActivos] = useState<TipoElemento[]>([
     "pico",
     "ibon",
@@ -320,6 +375,7 @@ export default function MapView() {
         setSeleccion(null);
         return;
       }
+      setVerProgreso(false);
       if (pulsado.layer.id === CAPA_ELEMENTOS) {
         const elemento = elementosPorId.get(String(pulsado.properties.id));
         if (!elemento) return;
@@ -497,6 +553,7 @@ export default function MapView() {
     setModoPlan(activar);
     if (activar) {
       setSeleccion(null);
+      setVerProgreso(false);
       if (isFirebaseConfigured && planes === null) {
         listarPlanes()
           .then(setPlanes)
@@ -530,6 +587,13 @@ export default function MapView() {
         puntos: puntosPlan,
         linea: lineaPlan,
         metricas: metricasPlan,
+        autor: sesion.usuario
+          ? {
+              uid: sesion.usuario.uid,
+              nombre:
+                sesion.usuario.displayName ?? sesion.usuario.email ?? "Anónimo",
+            }
+          : null,
       });
       const lista = await listarPlanes();
       setPlanes(lista);
@@ -653,6 +717,51 @@ export default function MapView() {
             Pirineo aragonés
           </p>
         </div>
+        {isFirebaseConfigured && !sesion.cargando && (
+          <div className="ml-2 flex items-center gap-2 border-l border-roca-800 pl-3">
+            {sesion.usuario ? (
+              <>
+                {sesion.usuario.photoURL ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={sesion.usuario.photoURL}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    className="h-7 w-7 rounded-full border border-roca-700"
+                  />
+                ) : (
+                  <span className="text-hielo-300">
+                    <IconoUsuario width={18} height={18} />
+                  </span>
+                )}
+                <div className="max-w-28">
+                  <p className="truncate text-xs text-hielo-200">
+                    {sesion.usuario.displayName ?? sesion.usuario.email}
+                  </p>
+                  {!sesion.invitado && (
+                    <p className="text-[10px] text-ocre-400">Sin invitación</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={salir}
+                  className="text-xs text-roca-300 underline decoration-roca-500 underline-offset-2 transition-colors hover:text-nieve"
+                >
+                  Salir
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => entrar().catch(() => {})}
+                className="flex items-center gap-1.5 rounded-full border border-roca-700 px-3 py-1.5 text-xs text-hielo-200 transition-colors hover:border-roca-500 hover:text-nieve"
+              >
+                <IconoUsuario width={14} height={14} />
+                Entrar
+              </button>
+            )}
+          </div>
+        )}
       </header>
 
       {/* Filtros por tipo y por red de senderos (también leyenda) */}
@@ -734,11 +843,31 @@ export default function MapView() {
         />
       )}
 
+      {/* Panel de progreso */}
+      {verProgreso && (
+        <Progreso
+          realizados={realizados}
+          usuario={sesion.usuario}
+          totalRutas={rutasRef.current?.size ?? 0}
+          onCerrar={() => setVerProgreso(false)}
+        />
+      )}
+
       {/* Ficha de la selección */}
       {!modoPlan && seleccion?.clase === "elemento" && (
         <FichaElemento
           elemento={seleccion.elemento}
           onCerrar={() => setSeleccion(null)}
+          realizado={realizadoDe("elemento", seleccion.elemento.id)}
+          puedeMarcar={puedeMarcar}
+          onMarcar={(fecha, notas) => {
+            const el = seleccion.elemento;
+            return marcar("elemento", el.id, el.nombre, el.tipo, fecha, notas);
+          }}
+          onDesmarcar={async () => {
+            const r = realizadoDe("elemento", seleccion.elemento.id);
+            if (r) await desmarcarRealizado(r.id);
+          }}
         />
       )}
       {!modoPlan && rutaVista && (
@@ -748,6 +877,15 @@ export default function MapView() {
           onInvertir={() => setSentidoInvertido((v) => !v)}
           onCerrar={() => setSeleccion(null)}
           onCursorPerfil={moverCursorPerfil}
+          realizado={realizadoDe("ruta", rutaVista.id)}
+          puedeMarcar={puedeMarcar}
+          onMarcar={(fecha, notas) =>
+            marcar("ruta", rutaVista.id, rutaVista.nombre, rutaVista.red, fecha, notas)
+          }
+          onDesmarcar={async () => {
+            const r = realizadoDe("ruta", rutaVista.id);
+            if (r) await desmarcarRealizado(r.id);
+          }}
         />
       )}
 
@@ -800,6 +938,20 @@ export default function MapView() {
             onClick={alternarPlanificador}
           >
             <IconoTrazar />
+          </BotonMapa>
+          <BotonMapa
+            etiqueta={verProgreso ? "Cerrar progreso" : "Ver progreso"}
+            activo={verProgreso}
+            onClick={() => {
+              const abrir = !verProgreso;
+              setVerProgreso(abrir);
+              if (abrir) {
+                setSeleccion(null);
+                if (modoPlan) alternarPlanificador();
+              }
+            }}
+          >
+            <IconoProgreso />
           </BotonMapa>
         </div>
       </div>

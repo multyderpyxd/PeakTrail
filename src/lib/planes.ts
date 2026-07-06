@@ -31,10 +31,13 @@ export async function guardarPlan(datos: {
   puntos: [number, number][];
   linea: [number, number][];
   metricas: MetricasLinea;
+  autor?: { uid: string; nombre: string } | null;
 }): Promise<string> {
   const { perfil, ...resumen } = datos.metricas;
   const referencia = await addDoc(collection(getDb(), COLECCION), {
     nombre: datos.nombre,
+    usuario: datos.autor?.uid ?? null,
+    nombreUsuario: datos.autor?.nombre ?? null,
     creadaEl: serverTimestamp(),
     puntos: aCoords(datos.puntos),
     linea: aCoords(datos.linea),
@@ -53,6 +56,7 @@ export async function listarPlanes(): Promise<RutaPlaneada[]> {
     return {
       id: d.id,
       nombre: datos.nombre,
+      nombreUsuario: datos.nombreUsuario ?? null,
       creadaEl:
         datos.creadaEl instanceof Timestamp
           ? datos.creadaEl.toDate().toISOString()
