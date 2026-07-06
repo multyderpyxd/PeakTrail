@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
@@ -28,6 +28,7 @@ import {
   COLOR_RED,
   ETIQUETA_RED,
   extremosRuta,
+  invertirRuta,
   limitesRuta,
   puntoEnRuta,
 } from "./rutas";
@@ -109,6 +110,7 @@ export default function MapView() {
   const [inclinacion, setInclinacion] = useState(VISTA_INICIAL.pitch);
   const [toponimos, setToponimos] = useState(true);
   const [seleccion, setSeleccion] = useState<Seleccion | null>(null);
+  const [sentidoInvertido, setSentidoInvertido] = useState(false);
   const [tiposActivos, setTiposActivos] = useState<TipoElemento[]>([
     "pico",
     "ibon",
@@ -248,6 +250,7 @@ export default function MapView() {
       // queryRenderedFeatures devuelve primero lo pintado más arriba:
       // los marcadores tienen prioridad sobre las rutas
       const [pulsado] = mapa.queryRenderedFeatures(e.point, { layers: capas });
+      setSentidoInvertido(false);
       if (!pulsado) {
         setSeleccion(null);
         return;
@@ -311,22 +314,27 @@ export default function MapView() {
     }
   }, [redesActivas, cargado]);
 
+  // Ruta tal y como se muestra: en su sentido original o invertida
+  const rutaVista = useMemo(() => {
+    if (seleccion?.clase !== "ruta") return null;
+    return sentidoInvertido ? invertirRuta(seleccion.ruta) : seleccion.ruta;
+  }, [seleccion, sentidoInvertido]);
+
   useEffect(() => {
     const mapa = mapaRef.current;
     if (!mapa || !cargado) return;
-    const ruta = seleccion?.clase === "ruta" ? seleccion.ruta : null;
-    mapa.setFilter(CAPA_RUTA_DESTACADA, ["==", ["get", "id"], ruta?.id ?? ""]);
+    mapa.setFilter(CAPA_RUTA_DESTACADA, ["==", ["get", "id"], rutaVista?.id ?? ""]);
     (mapa.getSource(CAPA_RUTA_EXTREMOS) as maplibregl.GeoJSONSource).setData(
-      ruta ? extremosRuta(ruta) : COLECCION_VACIA,
+      rutaVista ? extremosRuta(rutaVista) : COLECCION_VACIA,
     );
     (mapa.getSource(CAPA_RUTA_CURSOR) as maplibregl.GeoJSONSource).setData(
       COLECCION_VACIA,
     );
-  }, [seleccion, cargado]);
+  }, [rutaVista, cargado]);
 
   function moverCursorPerfil(km: number | null) {
     const mapa = mapaRef.current;
-    const ruta = seleccion?.clase === "ruta" ? seleccion.ruta : null;
+    const ruta = rutaVista;
     if (!mapa || !cargado || !ruta) return;
     (mapa.getSource(CAPA_RUTA_CURSOR) as maplibregl.GeoJSONSource).setData(
       km === null
@@ -478,9 +486,11 @@ export default function MapView() {
           onCerrar={() => setSeleccion(null)}
         />
       )}
-      {seleccion?.clase === "ruta" && (
+      {rutaVista && (
         <FichaRuta
-          ruta={seleccion.ruta}
+          ruta={rutaVista}
+          invertida={sentidoInvertido}
+          onInvertir={() => setSentidoInvertido((v) => !v)}
           onCerrar={() => setSeleccion(null)}
           onCursorPerfil={moverCursorPerfil}
         />

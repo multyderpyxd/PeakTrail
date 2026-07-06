@@ -1,6 +1,13 @@
+import { useMemo } from "react";
 import type { Ruta } from "@/types/rutas";
+import {
+  APARTADOS_MIDE,
+  formatearHoras,
+  midePorRuta,
+  tiempoEstimadoHoras,
+} from "@/lib/metricas-ruta";
 import { COLOR_RED, ETIQUETA_RED } from "./rutas";
-import { IconoCerrar } from "@/components/icons";
+import { IconoCerrar, IconoInvertir } from "@/components/icons";
 import { PerfilElevacion } from "./PerfilElevacion";
 
 function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
@@ -16,15 +23,21 @@ function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
 
 export function FichaRuta({
   ruta,
+  invertida,
+  onInvertir,
   onCerrar,
   onCursorPerfil,
 }: {
   ruta: Ruta;
+  invertida: boolean;
+  onInvertir: () => void;
   onCerrar: () => void;
   onCursorPerfil?: (km: number | null) => void;
 }) {
   const color = COLOR_RED[ruta.red];
   const enlaceOsm = `https://www.openstreetmap.org/relation/${ruta.fuente.osmId}`;
+  const horas = useMemo(() => tiempoEstimadoHoras(ruta.perfil), [ruta]);
+  const mide = useMemo(() => midePorRuta(ruta, horas), [ruta, horas]);
 
   return (
     <section
@@ -71,11 +84,60 @@ export function FichaRuta({
           />
         </dl>
 
-        <div className="mt-3">
+        <div className="mt-3 flex items-end justify-between gap-2">
+          <Dato etiqueta="Tiempo est." valor={formatearHoras(horas)} />
+          <dl
+            className="flex gap-1"
+            aria-label="Valoración MIDE estimada"
+            title={APARTADOS_MIDE.map(
+              (a) => `${a.sigla}: ${a.nombre} — ${mide[a.clave]}/5`,
+            ).join("\n")}
+          >
+            {APARTADOS_MIDE.map(({ clave, sigla, nombre }) => (
+              <div
+                key={clave}
+                className="w-9 rounded border border-roca-700 bg-roca-900/70 py-1 text-center"
+              >
+                <dd className="font-display text-sm leading-none text-nieve">
+                  {mide[clave]}
+                </dd>
+                <dt
+                  aria-label={nombre}
+                  className="mt-0.5 text-[9px] uppercase tracking-widest text-roca-300"
+                >
+                  {sigla}
+                </dt>
+              </div>
+            ))}
+          </dl>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
+            Perfil de elevación
+          </p>
+          <button
+            type="button"
+            aria-pressed={invertida}
+            onClick={onInvertir}
+            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+              invertida
+                ? "border-ocre-600 bg-ocre-600/20 text-ocre-200"
+                : "border-roca-700 text-hielo-300 hover:text-nieve"
+            }`}
+          >
+            <IconoInvertir width={13} height={13} />
+            Invertir sentido
+          </button>
+        </div>
+        <div className="mt-1">
           <PerfilElevacion perfil={ruta.perfil} onPunto={onCursorPerfil} />
         </div>
 
         <p className="mt-2 text-xs text-roca-300">
+          Tiempo de marcha por la función de Tobler y MIDE estimados
+          automáticamente, según el sentido mostrado.
+          <br />
           Trazado de{" "}
           <a
             href={enlaceOsm}
