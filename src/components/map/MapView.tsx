@@ -113,7 +113,9 @@ export default function MapView() {
 
   return (
     <main className="relative h-dvh w-full overflow-hidden">
-      <div ref={contenedorRef} className="absolute inset-0" />
+      {/* MapLibre impone position:relative al contenedor, así que la altura
+          debe ser explícita: con absolute+inset colapsaría a 0 */}
+      <div ref={contenedorRef} className="h-full w-full" />
 
       {/* Cabecera */}
       <header className="absolute left-4 top-4 flex items-center gap-3 rounded-lg border border-roca-700 bg-roca-950/85 px-4 py-3">
