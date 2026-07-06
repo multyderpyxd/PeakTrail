@@ -1,0 +1,26 @@
+{
+  "_comentario": "Ajustes curados a mano que el generador aplica sobre los datos de OSM: nombres de uso común, descripciones propias y elementos que falten. La clave es el id (slug) del elemento.",
+  "overrides": {
+    "pico-tuca-d-aneto-maladeta-de-corones": {
+      "nombre": "Aneto",
+      "descripcion": "Techo del Pirineo (3.404 m), en el macizo de la Maladeta. La vía normal cruza el glaciar del Aneto y el Paso de Mahoma."
+    },
+    "pico-punta-de-treserols-monte-perdido": {
+      "nombre": "Monte Perdido",
+      "descripcion": "Tercer macizo del Pirineo y cima caliza más alta de Europa, en el Parque Nacional de Ordesa y Monte Perdido."
+    },
+    "pico-tuca-de-posets": {
+      "nombre": "Posets",
+      "descripcion": "Segunda cima del Pirineo (3.369 m), entre los valles de Chistau y Eriste."
+    },
+    "refugio-de-goriz": {
+      "nombre": "Refugio de Góriz",
+      "descripcion": "Refugio guardado a 2.200 m, base clásica para Monte Perdido y la travesía de Ordesa."
+    },
+    "ibon-de-plan": {
+      "nombre": "Ibón de Plan (Basa de la Mora)",
+      "descripcion": "A 1.910 m en el macizo de Cotiella. Protagonista de la leyenda de la mora encantada."
+    }
+  },
+  "extras": []
+}

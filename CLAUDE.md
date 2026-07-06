@@ -6,8 +6,9 @@ App de montañismo del Pirineo aragonés (ibones, tresmiles, refugios, rutas GR/
 
 - **Hito 0 completado**: Next.js 15 (App Router) + TypeScript + TailwindCSS 4, SDK de Firebase integrado (`src/lib/firebase.ts`, inicialización condicionada a env vars), devcontainer para Codespaces.
 - **Hito 1 completado**: mapa 2.5D con MapLibre GL JS (`src/components/map/`): ortofoto PNOA y topónimos IGNBaseOrto vía WMTS del IGN, terreno 3D con teselas terrarium de Mapzen/AWS (EU-DEM/SRTM; cambiar por tubería propia MDT05 → terrain-RGB si se quiere más resolución), hillshade, cielo/niebla, controles propios (zoom, brújula, 2D/3D, topónimos) y atribución visible. Design tokens de la paleta Pirineo en `globals.css` (@theme de Tailwind 4), tipografía Fraunces + Archivo, set de iconos propio en `src/components/icons.tsx`.
-- **Pendiente del Hito 0** (requiere cuentas del usuario): crear proyecto Firebase y rellenar `.env.local` (plantilla en `.env.example`); importar el repo en Vercel.
-- **Siguiente**: Hito 2 — modelo de datos en Firestore y catálogo inicial de elementos (requiere el proyecto Firebase creado).
+- **Hito 2 completado (salvo la carga en Firestore)**: modelo de datos en `src/types/catalogo.ts`; catálogo generado en `data/catalogo.json` (350 elementos: 153 tresmiles, 166 ibones, 31 refugios) vía `npm run catalogo:generar` (Overpass/OSM, provincia de Huesca, lat ≥ 42.3, con ajustes manuales en `data/curados.json`); importador idempotente `npm run catalogo:importar` a la colección `elementos` (doc id = slug).
+- **Pendiente del usuario**: crear proyecto Firebase y rellenar `.env.local` (plantilla en `.env.example`), ejecutar `npm run catalogo:importar` (con reglas de Firestore en modo de prueba); importar el repo en Vercel.
+- **Siguiente**: Hito 3 — visualización interactiva de elementos sobre el mapa (marcadores por tipo con los iconos propios, ficha/popup, filtros). Puede desarrollarse leyendo `data/catalogo.json` aunque Firestore no esté listo.
 
 ## Comandos
 
