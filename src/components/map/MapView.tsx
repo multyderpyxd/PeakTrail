@@ -66,7 +66,10 @@ export default function MapView() {
       minZoom: 5.5,
       maxPitch: 80,
       attributionControl: { compact: false },
-    });
+      // Opción del gestor de ratón ausente en MapOptions (de ahí el cast):
+      // suaviza el giro con botón derecho (0.8 grados/píxel por defecto)
+      rotateDegreesPerPixelMoved: 0.55,
+    } as maplibregl.MapOptions & { rotateDegreesPerPixelMoved: number });
 
     mapa.addControl(
       new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }),
