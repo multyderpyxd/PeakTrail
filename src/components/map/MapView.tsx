@@ -409,6 +409,7 @@ export default function MapView() {
         if (!elemento) return;
         setSeleccion({ clase: "elemento", elemento });
         mapa.easeTo({ center: elemento.coordenadas, duration: 600 });
+        destellarElementoRef.current(elemento, 650);
       } else {
         const ruta = rutasRef.current?.get(String(pulsado.properties.id));
         if (!ruta) return;
@@ -736,7 +737,7 @@ export default function MapView() {
   }
   cancelarDestelloRef.current = cancelarDestello;
 
-  function destellarElemento(elemento: ElementoGeografico) {
+  function destellarElemento(elemento: ElementoGeografico, retrasoMs = 1150) {
     cancelarDestello();
     const mapa = mapaRef.current;
     if (!mapa || !cargado) return;
@@ -755,7 +756,7 @@ export default function MapView() {
       delay: 0,
     });
     mapa.setPaintProperty(CAPA_DESTELLO, "icon-opacity", 0);
-    // arranca cuando la cámara ya ha llegado (vuelo de 1200 ms)
+    // arranca cuando la cámara ya ha llegado
     destelloArranque.current = setTimeout(() => {
       fuente.setData(punto);
       let visible = true;
@@ -764,8 +765,12 @@ export default function MapView() {
         visible = !visible;
         mapa.setPaintProperty(CAPA_DESTELLO, "icon-opacity", visible ? 1 : 0);
       }, PERIODO_DESTELLO_MS);
-    }, 1150);
+    }, retrasoMs);
   }
+  // El manejador de clic del mapa se crea una sola vez: accede a la versión
+  // fresca de la función a través de este ref
+  const destellarElementoRef = useRef(destellarElemento);
+  destellarElementoRef.current = destellarElemento;
 
   function irAResultado(resultado: ResultadoBusqueda) {
     const mapa = mapaRef.current;
