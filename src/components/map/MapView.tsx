@@ -73,6 +73,7 @@ const CAPA_RUTA_EXTREMOS = "ruta-extremos";
 const CAPA_RUTA_CURSOR = "ruta-cursor";
 const CAPA_PLAN_LINEA = "plan-linea";
 const CAPA_PLAN_PUNTOS = "plan-puntos";
+const CAPA_DESTELLO = "elemento-destello";
 
 const COLECCION_VACIA: GeoJSON.FeatureCollection = {
   type: "FeatureCollection",
@@ -365,6 +366,19 @@ export default function MapView() {
         },
       });
 
+      // Destello del marcador al llegar desde el buscador
+      mapa.addSource(CAPA_DESTELLO, { type: "geojson", data: COLECCION_VACIA });
+      mapa.addLayer({
+        id: CAPA_DESTELLO,
+        type: "symbol",
+        source: CAPA_DESTELLO,
+        layout: {
+          "icon-image": ["concat", "marcador-", ["get", "tipo"], "-destello"],
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
+      });
+
       const totales: Record<RedRuta, number> = { gr: 0, pr: 0, sl: 0 };
       for (const ruta of rutas.values()) totales[ruta.red] += 1;
       setTotalesRutas(totales);
@@ -372,6 +386,7 @@ export default function MapView() {
     });
 
     mapa.on("click", (e) => {
+      cancelarDestelloRef.current();
       if (modoPlanRef.current) {
         setPlanVisible(null);
         setPuntosPlan((p) => [...p, [e.lngLat.lng, e.lngLat.lat]]);
@@ -701,6 +716,45 @@ export default function MapView() {
     mapaRef.current?.easeTo({ bearing: 0, duration: 700 });
   }
 
+  // Parpadeo del marcador encontrado: alterna la insignia normal con su
+  // variante rellena (fondo del color del aro) tres veces al llegar
+  const destelloTemporizadores = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const cancelarDestelloRef = useRef(() => {});
+
+  function cancelarDestello() {
+    for (const t of destelloTemporizadores.current) clearTimeout(t);
+    destelloTemporizadores.current = [];
+    const fuente = mapaRef.current?.getSource(CAPA_DESTELLO) as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    fuente?.setData(COLECCION_VACIA);
+  }
+  cancelarDestelloRef.current = cancelarDestello;
+
+  function destellarElemento(elemento: ElementoGeografico) {
+    cancelarDestello();
+    const mapa = mapaRef.current;
+    if (!mapa || !cargado) return;
+    const fuente = mapa.getSource(CAPA_DESTELLO) as maplibregl.GeoJSONSource;
+    const punto: GeoJSON.Feature = {
+      type: "Feature",
+      geometry: {
+        type: "Point",
+        coordinates: [elemento.coordenadas.lng, elemento.coordenadas.lat],
+      },
+      properties: { tipo: elemento.tipo },
+    };
+    // arranca cuando la cámara ya ha llegado (vuelo de 1200 ms)
+    for (let paso = 0; paso < 6; paso++) {
+      destelloTemporizadores.current.push(
+        setTimeout(
+          () => fuente.setData(paso % 2 === 0 ? punto : COLECCION_VACIA),
+          1150 + paso * 300,
+        ),
+      );
+    }
+  }
+
   function irAResultado(resultado: ResultadoBusqueda) {
     const mapa = mapaRef.current;
     setVerProgreso(false);
@@ -713,7 +767,9 @@ export default function MapView() {
         zoom: Math.max(mapa.getZoom(), 13),
         duration: 1200,
       });
+      destellarElemento(resultado.elemento);
     } else {
+      cancelarDestello();
       setSeleccion({ clase: "ruta", ruta: resultado.ruta });
       mapa?.fitBounds(limitesRuta(resultado.ruta), {
         padding: { top: 90, right: 90, bottom: 60, left: 400 },

@@ -16,12 +16,19 @@ export const COLOR_TIPO: Record<Exclude<TipoElemento, "collado">, string> = {
 
 export const TIPOS_MARCADOR = Object.keys(COLOR_TIPO) as (keyof typeof COLOR_TIPO)[];
 
-function svgMarcador(tipo: keyof typeof COLOR_TIPO): string {
+function svgMarcador(
+  tipo: keyof typeof COLOR_TIPO,
+  destello = false,
+): string {
   const glifo = TRAZOS[tipo].map((d) => `<path d="${d}"/>`).join("");
+  // La variante de destello invierte la insignia: fondo del color del aro
+  // y glifo oscuro; se alterna con la normal para hacer parpadear el punto
+  const fondo = destello ? COLOR_TIPO[tipo] : "#16130f";
+  const trazo = destello ? "#16130f" : "#f6f4ee";
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="68" height="68" viewBox="0 0 34 34">` +
-    `<circle cx="17" cy="17" r="14" fill="#16130f" fill-opacity="0.88" stroke="${COLOR_TIPO[tipo]}" stroke-width="2"/>` +
-    `<g transform="translate(6.6 6.6) scale(0.87)" fill="none" stroke="#f6f4ee" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${glifo}</g>` +
+    `<circle cx="17" cy="17" r="14" fill="${fondo}" fill-opacity="${destello ? 1 : 0.88}" stroke="${COLOR_TIPO[tipo]}" stroke-width="2"/>` +
+    `<g transform="translate(6.6 6.6) scale(0.87)" fill="none" stroke="${trazo}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${glifo}</g>` +
     `</svg>`
   );
 }
@@ -71,6 +78,9 @@ export async function cargarIconosMapa(mapa: maplibregl.Map): Promise<void> {
   await Promise.all([
     ...TIPOS_MARCADOR.map((tipo) =>
       anadirImagen(mapa, `marcador-${tipo}`, svgMarcador(tipo)),
+    ),
+    ...TIPOS_MARCADOR.map((tipo) =>
+      anadirImagen(mapa, `marcador-${tipo}-destello`, svgMarcador(tipo, true)),
     ),
     ...Object.entries(SVG_RUTA).map(([nombre, svg]) =>
       anadirImagen(mapa, nombre, svg),
