@@ -716,14 +716,19 @@ export default function MapView() {
     mapaRef.current?.easeTo({ bearing: 0, duration: 700 });
   }
 
-  // Parpadeo del marcador encontrado: alterna la insignia normal con su
-  // variante rellena (fondo del color del aro) tres veces al llegar
-  const destelloTemporizadores = useRef<ReturnType<typeof setTimeout>[]>([]);
+  // Pulso del marcador encontrado: la variante rellena (fondo del color del
+  // aro) se funde suavemente entrando y saliendo sobre la insignia normal,
+  // de forma indefinida hasta que el usuario interactúa
+  const PERIODO_DESTELLO_MS = 1200;
+  const destelloArranque = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const destelloIntervalo = useRef<ReturnType<typeof setInterval> | null>(null);
   const cancelarDestelloRef = useRef(() => {});
 
   function cancelarDestello() {
-    for (const t of destelloTemporizadores.current) clearTimeout(t);
-    destelloTemporizadores.current = [];
+    if (destelloArranque.current) clearTimeout(destelloArranque.current);
+    if (destelloIntervalo.current) clearInterval(destelloIntervalo.current);
+    destelloArranque.current = null;
+    destelloIntervalo.current = null;
     const fuente = mapaRef.current?.getSource(CAPA_DESTELLO) as
       | maplibregl.GeoJSONSource
       | undefined;
@@ -744,15 +749,22 @@ export default function MapView() {
       },
       properties: { tipo: elemento.tipo },
     };
+    // el fundido lo hace MapLibre transicionando icon-opacity
+    mapa.setPaintProperty(CAPA_DESTELLO, "icon-opacity-transition", {
+      duration: PERIODO_DESTELLO_MS,
+      delay: 0,
+    });
+    mapa.setPaintProperty(CAPA_DESTELLO, "icon-opacity", 0);
     // arranca cuando la cámara ya ha llegado (vuelo de 1200 ms)
-    for (let paso = 0; paso < 6; paso++) {
-      destelloTemporizadores.current.push(
-        setTimeout(
-          () => fuente.setData(paso % 2 === 0 ? punto : COLECCION_VACIA),
-          1150 + paso * 300,
-        ),
-      );
-    }
+    destelloArranque.current = setTimeout(() => {
+      fuente.setData(punto);
+      let visible = true;
+      mapa.setPaintProperty(CAPA_DESTELLO, "icon-opacity", 1);
+      destelloIntervalo.current = setInterval(() => {
+        visible = !visible;
+        mapa.setPaintProperty(CAPA_DESTELLO, "icon-opacity", visible ? 1 : 0);
+      }, PERIODO_DESTELLO_MS);
+    }, 1150);
   }
 
   function irAResultado(resultado: ResultadoBusqueda) {
@@ -969,7 +981,10 @@ export default function MapView() {
       {!modoPlan && seleccion?.clase === "elemento" && (
         <FichaElemento
           elemento={seleccion.elemento}
-          onCerrar={() => setSeleccion(null)}
+          onCerrar={() => {
+            cancelarDestello();
+            setSeleccion(null);
+          }}
           realizado={realizadoDe("elemento", seleccion.elemento.id)}
           puedeMarcar={puedeMarcar}
           onMarcar={(fecha, notas) => {
