@@ -8,10 +8,11 @@ import type { TipoElemento } from "@/types/catalogo";
  * identifica el tipo (los mismos tokens de la paleta que usa la UI).
  */
 
-export const COLOR_TIPO: Record<Exclude<TipoElemento, "collado">, string> = {
+export const COLOR_TIPO: Record<TipoElemento, string> = {
   pico: "#c99655", // ocre-400
   ibon: "#7fa8b8", // hielo-500
   refugio: "#7ba488", // pino-300
+  collado: "#b48ead", // malva de roca, validado en CVD contra los otros tres
 };
 
 export const TIPOS_MARCADOR = Object.keys(COLOR_TIPO) as (keyof typeof COLOR_TIPO)[];

@@ -149,7 +149,7 @@ export function SeccionStrava({
             Conectar con Strava
           </button>
           <p className="mt-1.5 text-[11px] leading-relaxed text-roca-300">
-            Tus salidas marcarán solas los tresmiles, ibones, refugios y rutas
+            Tus salidas marcarán solos los picos, collados, ibones, refugios y rutas
             por los que pasaste.
           </p>
         </>

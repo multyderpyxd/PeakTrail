@@ -24,7 +24,7 @@ import {
 } from "@/components/icons";
 import type { ElementoGeografico, TipoElemento } from "@/types/catalogo";
 import type { RedRuta, Ruta } from "@/types/rutas";
-import { coleccionElementos, elementosPorId, TOTALES } from "./elementos";
+import { cargarCatalogo, coleccionElementos, elementosPorId } from "./elementos";
 import { cargarIconosMapa } from "./marcadores";
 import {
   cargarRutas,
@@ -196,12 +196,20 @@ export default function MapView() {
     "pico",
     "ibon",
     "refugio",
+    "collado",
   ]);
   const [redesActivas, setRedesActivas] = useState<RedRuta[]>([
     "gr",
     "pr",
     "sl",
   ]);
+  // Solo se pintan los picos desde esta cota (los demás tipos no filtran)
+  const [altitudMinima, setAltitudMinima] = useState(0);
+  const [totalesTipos, setTotalesTipos] = useState<Record<
+    TipoElemento,
+    number
+  > | null>(null);
+  const [alturasPicos, setAlturasPicos] = useState<number[]>([]);
   const [totalesRutas, setTotalesRutas] = useState<Record<
     RedRuta,
     number
@@ -216,11 +224,18 @@ export default function MapView() {
     if (prefs.redesActivas) setRedesActivas(prefs.redesActivas);
     if (prefs.ambiente) setAmbiente(prefs.ambiente);
     if (prefs.toponimos !== undefined) setToponimos(prefs.toponimos);
+    if (prefs.altitudMinima !== undefined) setAltitudMinima(prefs.altitudMinima);
   }, []);
 
   useEffect(() => {
-    guardarPreferencias({ tiposActivos, redesActivas, ambiente, toponimos });
-  }, [tiposActivos, redesActivas, ambiente, toponimos]);
+    guardarPreferencias({
+      tiposActivos,
+      redesActivas,
+      ambiente,
+      toponimos,
+      altitudMinima,
+    });
+  }, [tiposActivos, redesActivas, ambiente, toponimos, altitudMinima]);
 
   useEffect(() => {
     if (!contenedorRef.current) return;
@@ -246,11 +261,14 @@ export default function MapView() {
     );
 
     mapa.on("load", async () => {
-      await cargarIconosMapa(mapa);
+      const [, rutas, catalogo] = await Promise.all([
+        cargarIconosMapa(mapa),
+        cargarRutas(),
+        cargarCatalogo(),
+      ]);
 
       // Rutas: líneas bajo los marcadores, con casco oscuro para que se lean
       // sobre la ortofoto y una capa ancha invisible que facilita el clic
-      const rutas = await cargarRutas();
       rutasRef.current = rutas;
       mapa.addSource(CAPA_RUTAS, {
         type: "geojson",
@@ -287,8 +305,15 @@ export default function MapView() {
 
       mapa.addSource(CAPA_ELEMENTOS, {
         type: "geojson",
-        data: coleccionElementos(),
+        data: coleccionElementos(catalogo.elementos),
       });
+      setTotalesTipos(catalogo.totales);
+      setAlturasPicos(
+        catalogo.elementos
+          .filter((el) => el.tipo === "pico" && el.altitud !== null)
+          .map((el) => el.altitud as number)
+          .sort((a, b) => a - b),
+      );
       mapa.addLayer({
         id: CAPA_ELEMENTOS,
         type: "symbol",
@@ -448,11 +473,16 @@ export default function MapView() {
     const mapa = mapaRef.current;
     if (!mapa || !cargado) return;
     mapa.setFilter(CAPA_ELEMENTOS, [
-      "in",
-      ["get", "tipo"],
-      ["literal", tiposActivos],
+      "all",
+      ["in", ["get", "tipo"], ["literal", tiposActivos]],
+      // La cota mínima solo recorta picos; ibones, refugios y collados no
+      [
+        "any",
+        ["!=", ["get", "tipo"], "pico"],
+        [">=", ["coalesce", ["get", "altitud"], 0], altitudMinima],
+      ],
     ]);
-  }, [tiposActivos, cargado]);
+  }, [tiposActivos, altitudMinima, cargado]);
 
   useEffect(() => {
     const mapa = mapaRef.current;
@@ -833,7 +863,7 @@ export default function MapView() {
             PeakTrail
           </h1>
           <p className="mt-1 text-[11px] uppercase tracking-[0.22em] text-hielo-300">
-            Pirineo aragonés
+            Pirineo
           </p>
         </div>
         {isFirebaseConfigured && !sesion.cargando && (
@@ -889,7 +919,10 @@ export default function MapView() {
         <PanelCapas
           tiposActivos={tiposActivos}
           onAlternarTipo={alternarTipo}
-          totalesTipos={TOTALES}
+          totalesTipos={totalesTipos}
+          altitudMinima={altitudMinima}
+          onAltitudMinima={setAltitudMinima}
+          alturasPicos={alturasPicos}
           redesActivas={redesActivas}
           onAlternarRed={alternarRed}
           totalesRutas={totalesRutas}

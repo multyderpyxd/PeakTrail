@@ -4,10 +4,16 @@ import type { User } from "firebase/auth";
 import { COLOR_TIPO } from "./marcadores";
 import { MarcarRealizado } from "./MarcarRealizado";
 import { SeccionSocial } from "./SeccionSocial";
-import { IconoCerrar, IconoIbon, IconoPico, IconoRefugio } from "@/components/icons";
+import {
+  IconoCerrar,
+  IconoCollado,
+  IconoIbon,
+  IconoPico,
+  IconoRefugio,
+} from "@/components/icons";
 
 const ETIQUETA_TIPO: Record<TipoElemento, string> = {
-  pico: "Tresmil",
+  pico: "Pico",
   ibon: "Ibón",
   refugio: "Refugio",
   collado: "Collado",
@@ -17,6 +23,7 @@ const ICONO_TIPO = {
   pico: IconoPico,
   ibon: IconoIbon,
   refugio: IconoRefugio,
+  collado: IconoCollado,
 } as const;
 
 function coordenadaLegible(valor: number, ejes: [string, string]) {

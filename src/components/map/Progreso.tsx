@@ -88,7 +88,8 @@ function Invitaciones({ emailPropio }: { emailPropio: string }) {
 }
 
 const FILAS_PERSONALES = [
-  { categoria: "pico", etiqueta: "Tresmiles" },
+  { categoria: "pico", etiqueta: "Picos" },
+  { categoria: "collado", etiqueta: "Collados" },
   { categoria: "ibon", etiqueta: "Ibones" },
   { categoria: "refugio", etiqueta: "Refugios" },
 ] as const;
@@ -111,7 +112,7 @@ export function Progreso({
   onCerrar: () => void;
 }) {
   const { propios, rutasPropias, grupo } = useMemo(() => {
-    const propios: Record<string, number> = { pico: 0, ibon: 0, refugio: 0 };
+    const propios: Record<string, number> = { pico: 0, collado: 0, ibon: 0, refugio: 0 };
     let rutasPropias = 0;
     const grupo = new Map<string, { nombre: string; total: number; picos: number }>();
     for (const r of realizados.values()) {
@@ -232,7 +233,7 @@ export function Progreso({
                     <span className="font-display text-sm text-nieve">
                       {miembro.picos}
                     </span>
-                    tresmiles
+                    picos
                   </span>
                   <span className="flex items-center gap-1 text-roca-300">
                     <IconoHecho width={12} height={12} />

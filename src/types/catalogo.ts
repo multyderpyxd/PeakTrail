@@ -2,7 +2,7 @@
  * Modelo de datos del catálogo de elementos geográficos.
  * En Firestore se guarda en la colección `elementos`, con `id` como
  * identificador de documento. El mismo tipo sirve para leer el snapshot
- * versionado en `data/catalogo.json`.
+ * versionado en `public/catalogo.json`.
  */
 
 export type TipoElemento = "pico" | "ibon" | "refugio" | "collado";

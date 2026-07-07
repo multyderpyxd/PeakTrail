@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { TipoElemento } from "@/types/catalogo";
 import type { RedRuta } from "@/types/rutas";
 import {
   IconoAmbiente,
   IconoCapas,
+  IconoCollado,
   IconoIbon,
   IconoPico,
   IconoRefugio,
@@ -24,11 +25,12 @@ import {
  */
 
 const FILTROS: {
-  tipo: keyof typeof COLOR_TIPO;
+  tipo: TipoElemento;
   etiqueta: string;
   Icono: typeof IconoPico;
 }[] = [
-  { tipo: "pico", etiqueta: "Tresmiles", Icono: IconoPico },
+  { tipo: "pico", etiqueta: "Picos", Icono: IconoPico },
+  { tipo: "collado", etiqueta: "Collados", Icono: IconoCollado },
   { tipo: "ibon", etiqueta: "Ibones", Icono: IconoIbon },
   { tipo: "refugio", etiqueta: "Refugios", Icono: IconoRefugio },
 ];
@@ -76,6 +78,9 @@ export function PanelCapas({
   tiposActivos,
   onAlternarTipo,
   totalesTipos,
+  altitudMinima,
+  onAltitudMinima,
+  alturasPicos,
   redesActivas,
   onAlternarRed,
   totalesRutas,
@@ -86,7 +91,11 @@ export function PanelCapas({
 }: {
   tiposActivos: TipoElemento[];
   onAlternarTipo: (tipo: TipoElemento) => void;
-  totalesTipos: Record<keyof typeof COLOR_TIPO, number>;
+  totalesTipos: Record<TipoElemento, number> | null;
+  altitudMinima: number;
+  onAltitudMinima: (metros: number) => void;
+  /** Cotas de todos los picos, ordenadas ascendentes (para el recuento). */
+  alturasPicos: number[];
   redesActivas: RedRuta[];
   onAlternarRed: (red: RedRuta) => void;
   totalesRutas: Record<RedRuta, number> | null;
@@ -97,6 +106,14 @@ export function PanelCapas({
 }) {
   const [abierto, setAbierto] = useState(false);
   const raizRef = useRef<HTMLDivElement>(null);
+
+  // Cuántos picos superan la cota elegida (las alturas vienen ordenadas)
+  const picosVisibles = useMemo(() => {
+    if (altitudMinima <= 0) return alturasPicos.length;
+    let i = 0;
+    while (i < alturasPicos.length && alturasPicos[i] < altitudMinima) i++;
+    return alturasPicos.length - i;
+  }, [alturasPicos, altitudMinima]);
 
   // Un clic fuera del panel (incluido el propio mapa) lo cierra
   useEffect(() => {
@@ -112,6 +129,7 @@ export function PanelCapas({
 
   const algoOculto =
     tiposActivos.length < FILTROS.length ||
+    altitudMinima > 0 ||
     (totalesRutas !== null &&
       redesActivas.length < Object.keys(ETIQUETA_RED).length);
 
@@ -143,18 +161,48 @@ export function PanelCapas({
           {FILTROS.map(({ tipo, etiqueta, Icono }) => {
             const activo = tiposActivos.includes(tipo);
             return (
-              <Fila
-                key={tipo}
-                activo={activo}
-                onClick={() => onAlternarTipo(tipo)}
-                etiqueta={etiqueta}
-                detalle={String(totalesTipos[tipo])}
-                icono={
-                  <span style={activo ? { color: COLOR_TIPO[tipo] } : undefined}>
-                    <Icono width={15} height={15} />
-                  </span>
-                }
-              />
+              <Fragment key={tipo}>
+                <Fila
+                  activo={activo}
+                  onClick={() => onAlternarTipo(tipo)}
+                  etiqueta={etiqueta}
+                  detalle={
+                    totalesTipos ? String(totalesTipos[tipo]) : undefined
+                  }
+                  icono={
+                    <span
+                      style={activo ? { color: COLOR_TIPO[tipo] } : undefined}
+                    >
+                      <Icono width={15} height={15} />
+                    </span>
+                  }
+                />
+                {tipo === "pico" && (
+                  <div className="mb-1 px-2 pb-1 pl-10">
+                    <div className="flex items-baseline justify-between gap-2 text-[10px]">
+                      <span className="uppercase tracking-[0.18em] text-roca-300">
+                        Cota mínima
+                      </span>
+                      <span className="text-hielo-300">
+                        {altitudMinima > 0
+                          ? `desde ${altitudMinima.toLocaleString("es-ES")} m · ${picosVisibles}`
+                          : "todos"}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={3000}
+                      step={100}
+                      value={altitudMinima}
+                      disabled={!activo}
+                      aria-label="Cota mínima de los picos mostrados"
+                      onChange={(e) => onAltitudMinima(Number(e.target.value))}
+                      className="mt-1 h-1 w-full accent-ocre-400 disabled:opacity-40"
+                    />
+                  </div>
+                )}
+              </Fragment>
             );
           })}
 

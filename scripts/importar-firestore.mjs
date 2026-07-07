@@ -1,5 +1,5 @@
 /**
- * Carga data/catalogo.json en la colección `elementos` de Firestore,
+ * Carga public/catalogo.json en la colección `elementos` de Firestore,
  * usando el id de cada elemento como id de documento (la carga es
  * idempotente: reimportar sobrescribe, no duplica).
  *
@@ -31,7 +31,7 @@ if (!config.apiKey || !config.projectId) {
   process.exit(1);
 }
 
-const { elementos } = JSON.parse(await readFile("data/catalogo.json", "utf8"));
+const { elementos } = JSON.parse(await readFile("public/catalogo.json", "utf8"));
 
 const db = getFirestore(initializeApp(config));
 const TAMANO_LOTE = 450; // margen bajo el límite de 500 escrituras por lote

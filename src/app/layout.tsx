@@ -16,7 +16,7 @@ const fraunces = Fraunces({
 export const metadata: Metadata = {
   title: "PeakTrail — Pirineo Aragonés",
   description:
-    "Mapa 2.5D, rutas, ibones y tresmiles del Pirineo aragonés para nuestro grupo de montaña.",
+    "Mapa 2.5D, rutas, picos, collados e ibones del Pirineo para nuestro grupo de montaña.",
 };
 
 export default function RootLayout({
