@@ -1,6 +1,6 @@
 # PeakTrail — Guía para Claude Code
 
-App de montañismo del Pirineo aragonés (ibones, tresmiles, refugios, rutas GR/PR/SL) sobre mapa 2.5D, para un grupo cerrado de ~10 amigos. El plan de desarrollo completo, con los 11 hitos, está en `planning.md` — consúltalo antes de empezar cualquier hito. Las mejoras diferidas que surjan al implementar se apuntan en `notas-mejoras.md` (retomarlas en el Hito 10).
+App de montañismo del Pirineo (ibones, picos, collados, refugios, rutas GR/PR/SL) sobre mapa 2.5D, para un grupo cerrado de ~10 amigos. El plan de desarrollo completo está en `planning.md`: fase 1 (hitos 0–10, completada salvo el 9) y fase 2 (hitos 11–21, del re-planning de julio de 2026) — consúltalo antes de empezar cualquier hito. Las mejoras diferidas que surjan al implementar se apuntan en `notas-mejoras.md`.
 
 ## Estado
 
@@ -18,7 +18,8 @@ App de montañismo del Pirineo aragonés (ibones, tresmiles, refugios, rutas GR/
 - **Pendiente del usuario (Hito 8)**: crear la app en Strava, rellenar las dos variables en `.env.local` y en Vercel, y probar el ciclo conectar → importar.
 - **Hito 9 APLAZADO** a petición del usuario (offline no prioritario en fase de desarrollo).
 - **Hito 10 completado**: ambientes del mapa día/niebla/atardecer (presets de cielo, sombreado y ortofoto en `mapStyle.ts`, botón en controles); búsqueda global por nombre de elementos y rutas (`Buscador.tsx`, en la fila de filtros, vuela y abre la ficha); favicon SVG propio (`src/app/icon.svg`); fotos del grupo por elemento/ruta (comprimidas en cliente a JPEG <900 KB y guardadas como data-URL en Firestore —Storage exige Blaze—, galería con visor y borrado propio) y comentarios en las fichas (`src/lib/social.ts`, `SeccionSocial.tsx`); `firestore.rules` ampliadas con `fotos` y `comentarios` (re-aplicar en la consola si ya se pegaron).
-- **Siguiente**: sesión de re-planning con el usuario para priorizar mejoras (ver `notas-mejoras.md`) y nuevas funcionalidades. El Hito 9 (PWA/offline) queda en la recámara.
+- **Re-planning hecho (julio de 2026)**: fase 2 definida en `planning.md` con el usuario. Decisiones: todos los picos con nombre y cota (no solo tresmiles) con filtro de altitud en la UI, collados como cuarto tipo, ámbito ampliado a todo el Pirineo peninsular (Navarra + Aragón + Cataluña) en catálogo y rutas, fidelidad con MDT05, UI con panel desplegable de capas, estadísticas de realización rediseñadas, y extras (meteo, compartir, GPX, explorador, Strava II, Wikidata, social II) en hitos pequeños 15–21. Sitios de interés (miradores, cascadas, cuevas) apuntados en `notas-mejoras.md` para después.
+- **Siguiente**: Hito 11 (UI ordenada con desplegables). El Hito 9 (PWA/offline) sigue en la recámara.
 
 ## Comandos
 

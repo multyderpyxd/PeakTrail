@@ -128,6 +128,45 @@ Cada hito está pensado para abordarse con Claude Code como una o pocas sesiones
 - **Límites de la API de Strava**: 100 peticiones/15 min y 1000/día en la app gratuita — de sobra para 10 usuarios.
 - Recuerda: los datos del IGN son gratuitos pero requieren atribución ("© Instituto Geográfico Nacional") visible en el mapa.
 
-## 5. Próximo paso inmediato
+## 5. Fase 2 — Plan de mejora (julio de 2026)
 
-Empezar por el **Hito 0**: crear el repositorio, montar Next.js + TypeScript + Tailwind, conectar Firebase y desplegar en Vercel. Es la base sobre la que se apoya todo lo demás, y es un hito pequeño y rápido de completar con Claude Code para coger impulso.
+Definida en la sesión de re-planning tras completar la fase 1 (hitos 0–8 y 10; el 9, PWA/offline, sigue aplazado). Decisiones de alcance tomadas:
+
+- El catálogo pasa de «tresmiles» a **todos los picos con nombre y cota** de OSM; la densidad se resuelve en la interfaz con un filtro de altitud, no recortando datos en el script.
+- El ámbito geográfico se amplía del Pirineo aragonés a **todo el Pirineo peninsular** (navarro, aragonés y catalán), tanto en catálogo como en rutas.
+- Los sitios de interés adicionales (miradores, cascadas, cuevas, ermitas…) quedan apuntados en `notas-mejoras.md` para más adelante.
+- Recuentos de referencia en OSM (Huesca, lat ≥ 42,3): 1.779 picos con nombre y cota (153 ≥ 3.000 m, 366 de 2.500–2.999, 355 de 2.000–2.499, 905 < 2.000) y 497 collados/puertos con nombre.
+
+### Hito 11 — UI ordenada con desplegables
+- Panel «Capas y filtros» desplegable que agrupa los filtros de catálogo y de redes de senderos; cerrado, la fila superior queda en marca + buscador + sesión.
+- Persistir las preferencias de vista (filtros, ambiente, topónimos) en localStorage.
+- **Entregable**: mapa despejado con los filtros en un panel plegable; las preferencias sobreviven a la recarga.
+
+### Hito 12 — Catálogo total: picos por altura y collados
+- Ingerir todos los picos con nombre y cota y los collados con nombre, ampliando el ámbito a Navarra y Cataluña.
+- Collado como cuarto tipo del mapa: color propio, marcador (el glifo ya existe en el set) y filtro.
+- Deslizador de rango de altitud en el panel de capas; prioridad de colisión y zoom mínimo por bandas para gobernar la densidad.
+- **Entregable**: la gran mayoría de picos y collados del Pirineo en el mapa, navegable sin saturación.
+
+### Hito 13 — Rutas ampliadas y fidelidad MDT05
+- Ampliar `rutas:generar` al Pirineo navarro y catalán; incorporar también las rutas sin red y las internacionales (iwn).
+- Recalcular perfiles, desniveles y cotas del catálogo con el MDT05 del IGN (5 m) descargado durante el script; el terreno 3D visual sigue con terrarium.
+- **Entregable**: más rutas y perfiles/tiempos/MIDE más fieles.
+
+### Hito 14 — Estadísticas de realización
+- Rediseño del panel de progreso con apartados dedicados: por tipo y banda de altitud, evolución temporal, comparativa del grupo, pendientes.
+- Mejoras visuales y funcionales con gráficos propios en SVG, coherentes con el set de iconos.
+- **Entregable**: panel de estadísticas con secciones propias, útil para ver qué falta y qué ha logrado el grupo.
+
+### Hitos 15–21 — mejoras acordadas, en hitos pequeños
+Separadas a propósito en hitos cortos para implementarlas con calma, por orden de valor/esfuerzo:
+
+- **Hito 15 — Meteo en las fichas**: previsión de 7 días por elemento (Open-Meteo, gratuito y sin clave): temperatura en cota, viento, precipitación y cota de nieve.
+- **Hito 16 — Compartir y buscar**: la URL codifica el elemento/ruta abierto (enlaces que abren la ficha directamente) y buscador con prioridad por prefijo y tolerancia a erratas.
+- **Hito 17 — GPX**: exportar rutas del catálogo y planes propios; importar un GPX al planificador.
+- **Hito 18 — Explorador del catálogo**: vista de lista ordenable (altitud, nombre, hechos/pendientes) complementaria al mapa.
+- **Hito 19 — Strava, segunda ronda**: importación incremental con `after=`, emparejar también los planes propios y calibrar umbrales con salidas reales.
+- **Hito 20 — Fichas enriquecidas**: descripción y foto libre desde Wikidata/Wikipedia para los picos que traen la etiqueta en OSM.
+- **Hito 21 — Social, segunda ronda**: miniaturas de fotos para la galería y comentarios/fotos en vivo con onSnapshot.
+
+El Hito 9 (PWA/offline) queda en la recámara para cuando la app pase a uso real en el monte.

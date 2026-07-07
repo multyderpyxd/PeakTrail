@@ -53,6 +53,14 @@ correcta; esto es margen de mejora.
 - **Comentarios/fotos en vivo**: se cargan al abrir la ficha (getDocs);
   con onSnapshot se verían llegar sin reabrir.
 
+## Catálogo (fase 2)
+
+- **Sitios de interés adicionales**: miradores (`tourism=viewpoint`),
+  cascadas (`waterfall=yes`), cuevas y simas (`natural=cave_entrance`),
+  ermitas… como nuevos tipos del catálogo. Acordado en el re-planning de
+  julio de 2026 dejarlo para después de la fase 2; sondear recuentos en
+  Overpass y decidir qué tipos compensan cuando toque.
+
 ## Búsqueda y UX (Hito 10)
 
 - **Priorizar coincidencias por prefijo** en el buscador (hoy es
