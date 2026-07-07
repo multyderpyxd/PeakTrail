@@ -6,36 +6,30 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import {
   AMBIENTES,
   CAPA_TOPONIMOS,
-  ETIQUETA_AMBIENTE,
   estiloMapa,
-  ORDEN_AMBIENTES,
   VISTA_INICIAL,
   type Ambiente,
 } from "./mapStyle";
 import { Buscador, type ResultadoBusqueda } from "./Buscador";
+import { PanelCapas } from "./PanelCapas";
 import {
-  IconoAmbiente,
   IconoBrujula,
-  IconoIbon,
   IconoMas,
   IconoMenos,
   IconoPico,
-  IconoRefugio,
   IconoProgreso,
   IconoRelieve,
-  IconoToponimo,
   IconoTrazar,
   IconoUsuario,
 } from "@/components/icons";
 import type { ElementoGeografico, TipoElemento } from "@/types/catalogo";
 import type { RedRuta, Ruta } from "@/types/rutas";
 import { coleccionElementos, elementosPorId, TOTALES } from "./elementos";
-import { cargarIconosMapa, COLOR_TIPO } from "./marcadores";
+import { cargarIconosMapa } from "./marcadores";
 import {
   cargarRutas,
   coleccionRutas,
   COLOR_RED,
-  ETIQUETA_RED,
   extremosRuta,
   invertirRuta,
   limitesRuta,
@@ -63,6 +57,7 @@ import {
 } from "@/lib/realizados";
 import { Progreso } from "./Progreso";
 import { procesarRetornoStrava } from "@/lib/strava";
+import { guardarPreferencias, leerPreferencias } from "@/lib/preferencias";
 
 const CAPA_ELEMENTOS = "elementos";
 const CAPA_RUTAS = "rutas";
@@ -94,16 +89,6 @@ const EXPRESION_COLOR_RED: maplibregl.ExpressionSpecification = [
   "sl",
   COLOR_RED.sl,
   COLOR_RED.sl,
-];
-
-const FILTROS: {
-  tipo: keyof typeof COLOR_TIPO;
-  etiqueta: string;
-  Icono: typeof IconoPico;
-}[] = [
-  { tipo: "pico", etiqueta: "Tresmiles", Icono: IconoPico },
-  { tipo: "ibon", etiqueta: "Ibones", Icono: IconoIbon },
-  { tipo: "refugio", etiqueta: "Refugios", Icono: IconoRefugio },
 ];
 
 function BotonMapa({
@@ -222,6 +207,20 @@ export default function MapView() {
     number
   > | null>(null);
   const rutasRef = useRef<Map<string, Ruta> | null>(null);
+
+  // Preferencias de vista: se restauran tras montar (no en el render, para
+  // no desajustar la hidratación) y se guardan en cada cambio
+  useEffect(() => {
+    const prefs = leerPreferencias();
+    if (prefs.tiposActivos) setTiposActivos(prefs.tiposActivos);
+    if (prefs.redesActivas) setRedesActivas(prefs.redesActivas);
+    if (prefs.ambiente) setAmbiente(prefs.ambiente);
+    if (prefs.toponimos !== undefined) setToponimos(prefs.toponimos);
+  }, []);
+
+  useEffect(() => {
+    guardarPreferencias({ tiposActivos, redesActivas, ambiente, toponimos });
+  }, [tiposActivos, redesActivas, ambiente, toponimos]);
 
   useEffect(() => {
     if (!contenedorRef.current) return;
@@ -795,14 +794,12 @@ export default function MapView() {
     }
   }
 
-  function cambiarAmbiente() {
+  // El ambiente y los topónimos se aplican como efectos para que las
+  // preferencias restauradas surtan efecto en cuanto el mapa carga
+  useEffect(() => {
     const mapa = mapaRef.current;
     if (!mapa || !cargado) return;
-    const siguiente =
-      ORDEN_AMBIENTES[
-        (ORDEN_AMBIENTES.indexOf(ambiente) + 1) % ORDEN_AMBIENTES.length
-      ];
-    const preset = AMBIENTES[siguiente];
+    const preset = AMBIENTES[ambiente];
     mapa.setSky(preset.sky as Parameters<typeof mapa.setSky>[0]);
     for (const [propiedad, valor] of Object.entries(preset.sombreado)) {
       mapa.setPaintProperty("sombreado-relieve", propiedad, valor);
@@ -810,20 +807,17 @@ export default function MapView() {
     for (const [propiedad, valor] of Object.entries(preset.ortofoto)) {
       mapa.setPaintProperty("ortofoto", propiedad, valor);
     }
-    setAmbiente(siguiente);
-  }
+  }, [ambiente, cargado]);
 
-  function alternarToponimos() {
+  useEffect(() => {
     const mapa = mapaRef.current;
-    if (!mapa) return;
-    const visibles = !toponimos;
+    if (!mapa || !cargado) return;
     mapa.setLayoutProperty(
       CAPA_TOPONIMOS,
       "visibility",
-      visibles ? "visible" : "none",
+      toponimos ? "visible" : "none",
     );
-    setToponimos(visibles);
-  }
+  }, [toponimos, cargado]);
 
   return (
     <main className="relative h-dvh w-full overflow-hidden">
@@ -889,62 +883,21 @@ export default function MapView() {
         )}
       </header>
 
-      {/* Filtros por tipo y por red de senderos (también leyenda) */}
-      <div className="absolute left-4 top-22 flex max-w-[calc(100vw-2rem)] flex-wrap gap-2">
+      {/* Buscador y panel de capas y filtros (también leyenda) */}
+      <div className="absolute left-4 top-22 z-10 flex max-w-[calc(100vw-2rem)] flex-wrap gap-2">
         <Buscador rutas={cargado ? rutasRef.current : null} onElegir={irAResultado} />
-        {FILTROS.map(({ tipo, etiqueta, Icono }) => {
-          const activo = tiposActivos.includes(tipo);
-          return (
-            <button
-              key={tipo}
-              type="button"
-              aria-pressed={activo}
-              onClick={() => alternarTipo(tipo)}
-              className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition-colors ${
-                activo
-                  ? "border-roca-700 bg-roca-950/85 text-nieve"
-                  : "border-roca-800 bg-roca-950/60 text-roca-500 hover:text-roca-300"
-              }`}
-            >
-              <span style={activo ? { color: COLOR_TIPO[tipo] } : undefined}>
-                <Icono width={15} height={15} />
-              </span>
-              {etiqueta}
-              <span className={activo ? "text-hielo-300" : ""}>
-                {TOTALES[tipo]}
-              </span>
-            </button>
-          );
-        })}
-        {totalesRutas &&
-          (Object.keys(ETIQUETA_RED) as RedRuta[]).map((red) => {
-            const activa = redesActivas.includes(red);
-            return (
-              <button
-                key={red}
-                type="button"
-                aria-pressed={activa}
-                onClick={() => alternarRed(red)}
-                className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition-colors ${
-                  activa
-                    ? "border-roca-700 bg-roca-950/85 text-nieve"
-                    : "border-roca-800 bg-roca-950/60 text-roca-500 hover:text-roca-300"
-                }`}
-              >
-                <span
-                  aria-hidden="true"
-                  className="h-1 w-4 rounded-full"
-                  style={{
-                    backgroundColor: activa ? COLOR_RED[red] : "#6e6353",
-                  }}
-                />
-                {ETIQUETA_RED[red]}
-                <span className={activa ? "text-hielo-300" : ""}>
-                  {totalesRutas[red]}
-                </span>
-              </button>
-            );
-          })}
+        <PanelCapas
+          tiposActivos={tiposActivos}
+          onAlternarTipo={alternarTipo}
+          totalesTipos={TOTALES}
+          redesActivas={redesActivas}
+          onAlternarRed={alternarRed}
+          totalesRutas={totalesRutas}
+          toponimos={toponimos}
+          onAlternarToponimos={() => setToponimos((v) => !v)}
+          ambiente={ambiente}
+          onAmbiente={setAmbiente}
+        />
       </div>
 
       {/* Planificador de rutas propias */}
@@ -1056,19 +1009,6 @@ export default function MapView() {
           >
             <IconoRelieve />
           </BotonMapa>
-          <BotonMapa
-            etiqueta={toponimos ? "Ocultar topónimos" : "Mostrar topónimos"}
-            activo={toponimos}
-            onClick={alternarToponimos}
-          >
-            <IconoToponimo />
-          </BotonMapa>
-          <BotonMapa
-            etiqueta={`Ambiente: ${ETIQUETA_AMBIENTE[ambiente]} (cambiar)`}
-            onClick={cambiarAmbiente}
-          >
-            <IconoAmbiente />
-          </BotonMapa>
         </div>
 
         <div className="flex flex-col overflow-hidden rounded-lg border border-roca-700 shadow-lg shadow-roca-950/60">
@@ -1104,9 +1044,9 @@ export default function MapView() {
         rotar la vista
       </p>
 
-      {/* Velo de carga */}
+      {/* Velo de carga: por encima de todo (la fila del buscador lleva z-10) */}
       {!cargado && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-roca-950">
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-roca-950">
           <IconoPico width={48} height={48} className="text-ocre-400" />
           <p className="text-sm tracking-wide text-hielo-300">
             Cargando el terreno del Pirineo…

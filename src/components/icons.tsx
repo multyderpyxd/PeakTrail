@@ -195,6 +195,17 @@ export function IconoRelieve(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Capas del mapa apiladas en perspectiva. */
+export function IconoCapas(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <path d="M12 3.5 20 8l-8 4.5L4 8l8-4.5Z" />
+      <path d="m4 12.5 8 4.5 8-4.5" />
+      <path d="m4 16.5 8 4.5 8-4.5" />
+    </Base>
+  );
+}
+
 /** Rótulo de topónimo sobre el mapa. */
 export function IconoToponimo(props: SVGProps<SVGSVGElement>) {
   return (
