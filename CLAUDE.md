@@ -1,6 +1,6 @@
 # PeakTrail — Guía para Claude Code
 
-App de montañismo del Pirineo aragonés (ibones, tresmiles, refugios, rutas GR/PR/SL) sobre mapa 2.5D, para un grupo cerrado de ~10 amigos. El plan de desarrollo completo, con los 11 hitos, está en `planning.md` — consúltalo antes de empezar cualquier hito.
+App de montañismo del Pirineo aragonés (ibones, tresmiles, refugios, rutas GR/PR/SL) sobre mapa 2.5D, para un grupo cerrado de ~10 amigos. El plan de desarrollo completo, con los 11 hitos, está en `planning.md` — consúltalo antes de empezar cualquier hito. Las mejoras diferidas que surjan al implementar se apuntan en `notas-mejoras.md` (retomarlas en el Hito 10).
 
 ## Estado
 

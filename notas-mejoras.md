@@ -1,0 +1,41 @@
+# Notas de mejoras pendientes
+
+Consideraciones apuntadas durante el desarrollo para retomarlas más adelante
+(sobre todo en el Hito 10 de pulido). No son bugs: la funcionalidad actual es
+correcta; esto es margen de mejora.
+
+## Importación de Strava
+
+- **Importación incremental**: hoy cada importación revisa las ~1000
+  actividades más recientes (5 peticiones). Guardar la época de la última
+  importación (localStorage o Firestore) y pasar `after=` al API para pedir
+  solo lo nuevo. Menos peticiones y respuesta inmediata en importaciones
+  rutinarias.
+- **Histórico completo la primera vez**: el tope de 5 páginas puede dejar
+  fuera actividades antiguas de cuentas muy activas. Primera importación con
+  paginación extendida y control del límite de peticiones (100/15 min),
+  con avisos de progreso.
+- **Fidelidad de la traza**: se usa `summary_polyline` (simplificada). Para
+  casos límite (un ibón a ~150 m justos, rutas con muchos zigzags) se podría
+  pedir la actividad detallada o sus streams — más fidelidad a cambio de una
+  petición extra por actividad dudosa.
+- **Calibrar umbrales con salidas reales**: 150 m (elemento), 250 m y 70 %
+  de cobertura (ruta) son razonables sobre papel; ajustarlos cuando el grupo
+  haya importado salidas de verdad y se vean falsos positivos/negativos.
+- **Cumbres con criterio de cota**: pasar a <150 m de un pico marca el pico
+  aunque no se llegara a la cumbre (p. ej. cresteando por debajo). Con los
+  streams de altitud de la actividad se podría exigir además haber alcanzado
+  la cota del pico menos un margen.
+- **Deportes que cuentan**: la lista `DEPORTES_MONTANA` es fija (a pie +
+  travesía). Decidir si la BTT cuenta para rutas y hacer la lista
+  configurable si hay discrepancia en el grupo.
+- **Tokens multi-dispositivo**: los tokens viven en localStorage del
+  dispositivo; en otro dispositivo hay que reconectar. Podrían guardarse en
+  Firestore (colección propia por uid, protegida por reglas) para conectar
+  una sola vez.
+- **Webhooks de Strava**: importación automática al subir una actividad,
+  sin pulsar el botón. Requiere endpoint de suscripción con verificación y
+  algo de estado en servidor; valorar si compensa para ~10 usuarios.
+- **Emparejar también los planes propios**: hoy solo se empareja contra el
+  catálogo (elementos y rutas GR/PR/SL); las rutas del planificador podrían
+  marcarse como realizadas igual.
