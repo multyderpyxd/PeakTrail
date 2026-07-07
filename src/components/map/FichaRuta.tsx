@@ -9,8 +9,10 @@ import {
 import type { Realizado } from "@/lib/realizados";
 import { COLOR_RED, ETIQUETA_RED } from "./rutas";
 import { IconoCerrar, IconoInvertir } from "@/components/icons";
+import type { User } from "firebase/auth";
 import { MarcarRealizado } from "./MarcarRealizado";
 import { PerfilElevacion } from "./PerfilElevacion";
+import { SeccionSocial } from "./SeccionSocial";
 
 function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
   return (
@@ -33,6 +35,8 @@ export function FichaRuta({
   puedeMarcar,
   onMarcar,
   onDesmarcar,
+  usuario,
+  esInvitado,
 }: {
   ruta: Ruta;
   invertida: boolean;
@@ -43,6 +47,8 @@ export function FichaRuta({
   puedeMarcar: boolean;
   onMarcar: (fecha: string, notas: string) => Promise<void>;
   onDesmarcar: () => Promise<void>;
+  usuario: User | null;
+  esInvitado: boolean;
 }) {
   const color = COLOR_RED[ruta.red];
   const enlaceOsm = `https://www.openstreetmap.org/relation/${ruta.fuente.osmId}`;
@@ -52,7 +58,7 @@ export function FichaRuta({
   return (
     <section
       aria-label={`Ficha de la ruta ${ruta.nombre}`}
-      className="absolute left-4 top-33 w-88 max-w-[calc(100vw-2rem)] rounded-lg border border-roca-700 bg-roca-950/90 shadow-lg shadow-roca-950/60"
+      className="absolute left-4 top-33 max-h-[calc(100dvh-10rem)] w-88 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border border-roca-700 bg-roca-950/90 shadow-lg shadow-roca-950/60"
     >
       <header className="flex items-start gap-3 border-b border-roca-800 p-4">
         <span
@@ -149,6 +155,12 @@ export function FichaRuta({
           puedeMarcar={puedeMarcar}
           onMarcar={onMarcar}
           onDesmarcar={onDesmarcar}
+        />
+        <SeccionSocial
+          refTipo="ruta"
+          refId={ruta.id}
+          usuario={usuario}
+          esInvitado={esInvitado}
         />
 
         <p className="mt-2 text-xs text-roca-300">

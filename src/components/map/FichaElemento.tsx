@@ -1,7 +1,9 @@
 import type { ElementoGeografico, TipoElemento } from "@/types/catalogo";
 import type { Realizado } from "@/lib/realizados";
+import type { User } from "firebase/auth";
 import { COLOR_TIPO } from "./marcadores";
 import { MarcarRealizado } from "./MarcarRealizado";
+import { SeccionSocial } from "./SeccionSocial";
 import { IconoCerrar, IconoIbon, IconoPico, IconoRefugio } from "@/components/icons";
 
 const ETIQUETA_TIPO: Record<TipoElemento, string> = {
@@ -28,6 +30,8 @@ export function FichaElemento({
   puedeMarcar,
   onMarcar,
   onDesmarcar,
+  usuario,
+  esInvitado,
 }: {
   elemento: ElementoGeografico;
   onCerrar: () => void;
@@ -35,6 +39,8 @@ export function FichaElemento({
   puedeMarcar: boolean;
   onMarcar: (fecha: string, notas: string) => Promise<void>;
   onDesmarcar: () => Promise<void>;
+  usuario: User | null;
+  esInvitado: boolean;
 }) {
   const color =
     COLOR_TIPO[elemento.tipo as keyof typeof COLOR_TIPO] ?? "#c99655";
@@ -48,7 +54,7 @@ export function FichaElemento({
   return (
     <section
       aria-label={`Ficha de ${elemento.nombre}`}
-      className="absolute left-4 top-33 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-roca-700 bg-roca-950/90 shadow-lg shadow-roca-950/60"
+      className="absolute left-4 top-33 max-h-[calc(100dvh-10rem)] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border border-roca-700 bg-roca-950/90 shadow-lg shadow-roca-950/60"
     >
       <header className="flex items-start gap-3 border-b border-roca-800 p-4">
         <span
@@ -111,6 +117,12 @@ export function FichaElemento({
           puedeMarcar={puedeMarcar}
           onMarcar={onMarcar}
           onDesmarcar={onDesmarcar}
+        />
+        <SeccionSocial
+          refTipo="elemento"
+          refId={elemento.id}
+          usuario={usuario}
+          esInvitado={esInvitado}
         />
       </div>
     </section>

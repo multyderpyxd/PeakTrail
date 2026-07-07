@@ -39,3 +39,23 @@ correcta; esto es margen de mejora.
 - **Emparejar también los planes propios**: hoy solo se empareja contra el
   catálogo (elementos y rutas GR/PR/SL); las rutas del planificador podrían
   marcarse como realizadas igual.
+
+## Fotos y social (Hito 10)
+
+- **Almacenamiento de fotos**: van como data-URL JPEG (~200 KB) dentro de
+  documentos de Firestore porque Firebase Storage exige plan Blaze en
+  proyectos nuevos. Funciona para el grupo, pero cada carga de galería
+  descarga las fotos enteras (no hay miniaturas separadas) y consume cuota
+  de lecturas. Migrar a un almacén de objetos gratuito (Cloudflare R2,
+  Supabase Storage) o a Blaze con presupuesto 0 cuando pese.
+- **Miniaturas**: guardar una versión pequeña (~20 KB) junto a la grande
+  para que la rejilla de la galería no descargue los originales.
+- **Comentarios/fotos en vivo**: se cargan al abrir la ficha (getDocs);
+  con onSnapshot se verían llegar sin reabrir.
+
+## Búsqueda y UX (Hito 10)
+
+- **Priorizar coincidencias por prefijo** en el buscador (hoy es
+  «contiene», por orden del índice) y quizá tolerancia a erratas.
+- **Persistir preferencias de vista** (ambiente elegido, topónimos,
+  filtros) en localStorage entre sesiones.

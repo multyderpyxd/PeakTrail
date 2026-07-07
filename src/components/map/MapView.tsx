@@ -4,11 +4,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
+  AMBIENTES,
   CAPA_TOPONIMOS,
+  ETIQUETA_AMBIENTE,
   estiloMapa,
+  ORDEN_AMBIENTES,
   VISTA_INICIAL,
+  type Ambiente,
 } from "./mapStyle";
+import { Buscador, type ResultadoBusqueda } from "./Buscador";
 import {
+  IconoAmbiente,
   IconoBrujula,
   IconoIbon,
   IconoMas,
@@ -134,6 +140,7 @@ export default function MapView() {
   const [rumbo, setRumbo] = useState(VISTA_INICIAL.bearing);
   const [inclinacion, setInclinacion] = useState(VISTA_INICIAL.pitch);
   const [toponimos, setToponimos] = useState(true);
+  const [ambiente, setAmbiente] = useState<Ambiente>("dia");
   const [seleccion, setSeleccion] = useState<Seleccion | null>(null);
   const [sentidoInvertido, setSentidoInvertido] = useState(false);
 
@@ -694,6 +701,45 @@ export default function MapView() {
     mapaRef.current?.easeTo({ bearing: 0, duration: 700 });
   }
 
+  function irAResultado(resultado: ResultadoBusqueda) {
+    const mapa = mapaRef.current;
+    setVerProgreso(false);
+    if (modoPlan) alternarPlanificador();
+    setSentidoInvertido(false);
+    if (resultado.clase === "elemento") {
+      setSeleccion({ clase: "elemento", elemento: resultado.elemento });
+      mapa?.easeTo({
+        center: resultado.elemento.coordenadas,
+        zoom: Math.max(mapa.getZoom(), 13),
+        duration: 1200,
+      });
+    } else {
+      setSeleccion({ clase: "ruta", ruta: resultado.ruta });
+      mapa?.fitBounds(limitesRuta(resultado.ruta), {
+        padding: { top: 90, right: 90, bottom: 60, left: 400 },
+        duration: 1200,
+      });
+    }
+  }
+
+  function cambiarAmbiente() {
+    const mapa = mapaRef.current;
+    if (!mapa || !cargado) return;
+    const siguiente =
+      ORDEN_AMBIENTES[
+        (ORDEN_AMBIENTES.indexOf(ambiente) + 1) % ORDEN_AMBIENTES.length
+      ];
+    const preset = AMBIENTES[siguiente];
+    mapa.setSky(preset.sky as Parameters<typeof mapa.setSky>[0]);
+    for (const [propiedad, valor] of Object.entries(preset.sombreado)) {
+      mapa.setPaintProperty("sombreado-relieve", propiedad, valor);
+    }
+    for (const [propiedad, valor] of Object.entries(preset.ortofoto)) {
+      mapa.setPaintProperty("ortofoto", propiedad, valor);
+    }
+    setAmbiente(siguiente);
+  }
+
   function alternarToponimos() {
     const mapa = mapaRef.current;
     if (!mapa) return;
@@ -772,6 +818,7 @@ export default function MapView() {
 
       {/* Filtros por tipo y por red de senderos (también leyenda) */}
       <div className="absolute left-4 top-22 flex max-w-[calc(100vw-2rem)] flex-wrap gap-2">
+        <Buscador rutas={cargado ? rutasRef.current : null} onElegir={irAResultado} />
         {FILTROS.map(({ tipo, etiqueta, Icono }) => {
           const activo = tiposActivos.includes(tipo);
           return (
@@ -877,6 +924,8 @@ export default function MapView() {
             const r = realizadoDe("elemento", seleccion.elemento.id);
             if (r) await desmarcarRealizado(r.id);
           }}
+          usuario={sesion.usuario}
+          esInvitado={sesion.invitado}
         />
       )}
       {!modoPlan && rutaVista && (
@@ -895,6 +944,8 @@ export default function MapView() {
             const r = realizadoDe("ruta", rutaVista.id);
             if (r) await desmarcarRealizado(r.id);
           }}
+          usuario={sesion.usuario}
+          esInvitado={sesion.invitado}
         />
       )}
 
@@ -935,6 +986,12 @@ export default function MapView() {
             onClick={alternarToponimos}
           >
             <IconoToponimo />
+          </BotonMapa>
+          <BotonMapa
+            etiqueta={`Ambiente: ${ETIQUETA_AMBIENTE[ambiente]} (cambiar)`}
+            onClick={cambiarAmbiente}
+          >
+            <IconoAmbiente />
           </BotonMapa>
         </div>
 

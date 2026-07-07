@@ -128,6 +128,26 @@ export function IconoActividad(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Ambiente / luz de la escena (sol sobre el horizonte). */
+export function IconoAmbiente(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <circle cx="12" cy="12.5" r="4" />
+      <path d="M12 5.5v-2M17 7.5l1.4-1.4M6.9 7.5 5.5 6.1M19.5 12.5h2M2.5 12.5h2M4.5 18.5h15" />
+    </Base>
+  );
+}
+
+/** Buscar. */
+export function IconoBuscar(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <circle cx="10.5" cy="10.5" r="5.5" />
+      <path d="m15 15 5 5" />
+    </Base>
+  );
+}
+
 /** Cerrar paneles y fichas. */
 export function IconoCerrar(props: SVGProps<SVGSVGElement>) {
   return (

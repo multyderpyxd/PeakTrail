@@ -50,5 +50,19 @@ service cloud.firestore {
         request.resource.data.usuario == request.auth.uid;
       allow delete: if invitado() && resource.data.usuario == request.auth.uid;
     }
+
+    // Fotos y comentarios del grupo: todos leen, cada uno borra lo suyo
+    match /comentarios/{id} {
+      allow read: if invitado();
+      allow create: if invitado() &&
+        request.resource.data.usuario == request.auth.uid;
+      allow delete: if invitado() && resource.data.usuario == request.auth.uid;
+    }
+    match /fotos/{id} {
+      allow read: if invitado();
+      allow create: if invitado() &&
+        request.resource.data.usuario == request.auth.uid;
+      allow delete: if invitado() && resource.data.usuario == request.auth.uid;
+    }
   }
 }
