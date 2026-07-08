@@ -306,6 +306,28 @@ export function IconoMeteo({
   }
 }
 
+/** Explorador: lista con viñetas. */
+export function IconoLista(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <circle cx="5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+      <circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" />
+      <circle cx="5" cy="17.5" r="1" fill="currentColor" stroke="none" />
+      <path d="M9.5 6.5H20M9.5 12H20M9.5 17.5H20" />
+    </Base>
+  );
+}
+
+/** Flechas de ordenación: dos triángulos apilados. */
+export function IconoOrden(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <path d="M8 9.5 12 5l4 4.5" />
+      <path d="M8 14.5l4 4.5 4-4.5" />
+    </Base>
+  );
+}
+
 /** Descargar: flecha hacia una bandeja. */
 export function IconoDescargar(props: SVGProps<SVGSVGElement>) {
   return (

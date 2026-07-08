@@ -14,6 +14,7 @@ import { Buscador, type ResultadoBusqueda } from "./Buscador";
 import { PanelCapas } from "./PanelCapas";
 import {
   IconoBrujula,
+  IconoLista,
   IconoMas,
   IconoMenos,
   IconoPico,
@@ -62,6 +63,7 @@ import {
   marcarRealizado,
   type Realizado,
 } from "@/lib/realizados";
+import { Explorador } from "./Explorador";
 import { Progreso } from "./Progreso";
 import { procesarRetornoStrava } from "@/lib/strava";
 import { guardarPreferencias, leerPreferencias } from "@/lib/preferencias";
@@ -210,6 +212,7 @@ export default function MapView() {
     new Map(),
   );
   const [verProgreso, setVerProgreso] = useState(false);
+  const [verExplorador, setVerExplorador] = useState(false);
 
   useEffect(() => {
     if (!sesion.invitado) {
@@ -516,6 +519,7 @@ export default function MapView() {
         return;
       }
       setVerProgreso(false);
+      setVerExplorador(false);
       if (pulsado.layer.id === CAPA_ELEMENTOS) {
         const elemento = elementosPorId.get(String(pulsado.properties.id));
         if (!elemento) return;
@@ -765,6 +769,7 @@ export default function MapView() {
     if (activar) {
       setSeleccion(null);
       setVerProgreso(false);
+      setVerExplorador(false);
       if (isFirebaseConfigured && planes === null) {
         listarPlanes()
           .then(setPlanes)
@@ -1022,6 +1027,7 @@ export default function MapView() {
   function irAResultado(resultado: ResultadoBusqueda) {
     const mapa = mapaRef.current;
     setVerProgreso(false);
+    setVerExplorador(false);
     if (modoPlan) alternarPlanificador();
     setSentidoInvertido(false);
     if (resultado.clase === "elemento") {
@@ -1228,6 +1234,17 @@ export default function MapView() {
         />
       )}
 
+      {/* Explorador del catálogo */}
+      {verExplorador && (
+        <Explorador
+          rutas={cargado ? rutasRef.current : null}
+          realizados={realizados}
+          usuario={sesion.usuario}
+          onIr={irAResultado}
+          onCerrar={() => setVerExplorador(false)}
+        />
+      )}
+
       {/* Ficha de la selección */}
       {!modoPlan && seleccion?.clase === "elemento" && (
         <FichaElemento
@@ -1322,11 +1339,29 @@ export default function MapView() {
               setVerProgreso(abrir);
               if (abrir) {
                 setSeleccion(null);
+                setVerExplorador(false);
                 if (modoPlan) alternarPlanificador();
               }
             }}
           >
             <IconoProgreso />
+          </BotonMapa>
+          <BotonMapa
+            etiqueta={
+              verExplorador ? "Cerrar explorador" : "Explorar el catálogo"
+            }
+            activo={verExplorador}
+            onClick={() => {
+              const abrir = !verExplorador;
+              setVerExplorador(abrir);
+              if (abrir) {
+                setSeleccion(null);
+                setVerProgreso(false);
+                if (modoPlan) alternarPlanificador();
+              }
+            }}
+          >
+            <IconoLista />
           </BotonMapa>
         </div>
       </div>
