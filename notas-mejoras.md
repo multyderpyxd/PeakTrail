@@ -75,6 +75,28 @@ correcta; esto es margen de mejora.
   cada elemento/ruta a su comarca, desglose de dos niveles en el panel) que
   se hará como hito futuro — anotado como Hito 22 en `planning.md`.
 
+## Planificador (Hito 17)
+
+- **Insertar un punto en mitad de la ruta**: hoy los clics añaden siempre al
+  final; para meter un punto entre dos existentes hay que reordenar con las
+  flechas. Se podría permitir arrastrar la propia línea para crear un punto
+  intermedio (estilo Komoot) o insertar en una posición concreta de la lista.
+- **Editar una traza importada**: al importar un GPX la traza se conserva
+  íntegra como un único segmento salida→llegada (caché sembrada); si se
+  arrastra un extremo, ese tramo se recalcula (recto/senderos) y se pierde la
+  geometría original. Suficiente para ver/guardar/exportar, pero no para
+  editar finamente lo importado. Se podría trocear el GPX en varios waypoints
+  con Douglas-Peucker si se quiere editarlo por tramos.
+- **Reordenar arrastrando la lista**: las flechas ↑↓ del panel bastan para
+  pocos puntos; con muchos, un arrastrar-y-soltar de la lista sería más ágil.
+
+## Meteo (Hito 15)
+
+- **Meteo por hora / por tramo de ruta**: hoy es la previsión diaria en un
+  único punto (el elemento, o el punto medio de la ruta). Para rutas largas
+  que cruzan cotas muy distintas, una previsión por tramos o por franjas
+  horarias del día de salida daría más información.
+
 ## Catálogo (fase 2)
 
 - **Sitios de interés adicionales**: miradores (`tourism=viewpoint`),
