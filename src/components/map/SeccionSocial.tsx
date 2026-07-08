@@ -4,8 +4,8 @@ import type { User } from "firebase/auth";
 import {
   borrarComentario,
   borrarFoto,
-  cargarSocial,
   comentar,
+  escucharSocial,
   subirFoto,
   type Comentario,
   type Foto,
@@ -45,19 +45,13 @@ export function SeccionSocial({
 
   useEffect(() => {
     if (!esInvitado) return;
-    let cancelado = false;
     setCargado(false);
-    cargarSocial(refTipo, refId)
-      .then((datos) => {
-        if (cancelado) return;
-        setComentarios(datos.comentarios);
-        setFotos(datos.fotos);
-        setCargado(true);
-      })
-      .catch(() => !cancelado && setAviso("No se pudo cargar la actividad del grupo"));
-    return () => {
-      cancelado = true;
-    };
+    const dejarDeEscuchar = escucharSocial(refTipo, refId, (datos) => {
+      setComentarios(datos.comentarios);
+      setFotos(datos.fotos);
+      setCargado(datos.listo);
+    });
+    return dejarDeEscuchar;
   }, [refTipo, refId, esInvitado]);
 
   if (!esInvitado || !usuario) return null;
@@ -67,12 +61,8 @@ export function SeccionSocial({
     nombreUsuario: usuario.displayName ?? usuario.email ?? "Anónimo",
   };
 
-  async function recargar() {
-    const datos = await cargarSocial(refTipo, refId);
-    setComentarios(datos.comentarios);
-    setFotos(datos.fotos);
-  }
-
+  // No hace falta recargar tras escribir: el propio onSnapshot de
+  // escucharSocial refleja la escritura (la propia y las del resto)
   async function enviarComentario(e: React.FormEvent) {
     e.preventDefault();
     if (!texto.trim() || ocupado) return;
@@ -80,7 +70,6 @@ export function SeccionSocial({
     try {
       await comentar({ refTipo, refId, ...identidad, texto: texto.trim() });
       setTexto("");
-      await recargar();
     } finally {
       setOcupado(false);
     }
@@ -94,7 +83,6 @@ export function SeccionSocial({
     setAviso(null);
     try {
       await subirFoto({ refTipo, refId, ...identidad, archivo });
-      await recargar();
     } catch (err) {
       setAviso(err instanceof Error ? err.message : "No se pudo subir la foto");
     } finally {
@@ -140,7 +128,7 @@ export function SeccionSocial({
               className="overflow-hidden rounded border border-roca-800"
             >
               <img
-                src={foto.datos}
+                src={foto.miniatura ?? foto.datos}
                 alt={`Foto de ${foto.nombreUsuario}`}
                 className="h-20 w-full object-cover transition-transform hover:scale-105"
               />
@@ -168,10 +156,7 @@ export function SeccionSocial({
                 <button
                   type="button"
                   aria-label="Borrar comentario"
-                  onClick={async () => {
-                    await borrarComentario(c.id);
-                    await recargar();
-                  }}
+                  onClick={() => borrarComentario(c.id)}
                   className="p-0.5 text-roca-400 transition-colors hover:text-nieve"
                 >
                   <IconoPapelera width={12} height={12} />
@@ -218,11 +203,10 @@ export function SeccionSocial({
             {ampliada.usuario === usuario.uid && (
               <button
                 type="button"
-                onClick={async (e) => {
+                onClick={(e) => {
                   e.stopPropagation();
-                  await borrarFoto(ampliada.id);
+                  borrarFoto(ampliada.id);
                   setAmpliada(null);
-                  await recargar();
                 }}
                 className="flex items-center gap-1 text-roca-300 transition-colors hover:text-nieve"
               >

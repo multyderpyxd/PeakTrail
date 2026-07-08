@@ -44,18 +44,24 @@ correcta; esto es margen de mejora.
   Compartir las trazas con el grupo exigiría guardarlas en Firestore y
   decidir la cuestión de privacidad (cada uno elige si publica las suyas).
 
-## Fotos y social (Hito 10)
+## Fotos y social (Hito 10, ronda 2 en el Hito 21)
 
 - **Almacenamiento de fotos**: van como data-URL JPEG (~200 KB) dentro de
   documentos de Firestore porque Firebase Storage exige plan Blaze en
   proyectos nuevos. Funciona para el grupo, pero cada carga de galería
-  descarga las fotos enteras (no hay miniaturas separadas) y consume cuota
-  de lecturas. Migrar a un almacén de objetos gratuito (Cloudflare R2,
-  Supabase Storage) o a Blaze con presupuesto 0 cuando pese.
-- **Miniaturas**: guardar una versión pequeña (~20 KB) junto a la grande
-  para que la rejilla de la galería no descargue los originales.
-- **Comentarios/fotos en vivo**: se cargan al abrir la ficha (getDocs);
-  con onSnapshot se verían llegar sin reabrir.
+  ahora sí usa la miniatura (ved abajo) para el listado; el documento
+  entero (con el original) se sigue leyendo igual, así que la cuota de
+  lecturas de Firestore no baja, solo el tráfico de descarga de imagen.
+  Migrar a un almacén de objetos gratuito (Cloudflare R2, Supabase Storage)
+  o a Blaze con presupuesto 0 sigue pendiente si la cuota de Firestore
+  aprieta.
+- ~~**Miniaturas**~~: hecho en el Hito 21 (`src/lib/social.ts`,
+  `procesarImagen`: miniatura de 320 px / <30 KB junto a la grande de
+  1280 px / <900 KB; la rejilla de la galería pinta la miniatura, el visor
+  ampliado la foto completa; las fotos de antes del hito no tienen
+  miniatura y caen al original sin romperse).
+- ~~**Comentarios/fotos en vivo**~~: hecho en el Hito 21 (`escucharSocial`
+  con `onSnapshot`, dos queries por refTipo+refId).
 
 ## Rutas (Hito 13)
 
