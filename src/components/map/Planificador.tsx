@@ -7,6 +7,7 @@ import {
   IconoCerrar,
   IconoDescargar,
   IconoDeshacer,
+  IconoHecho,
   IconoImportar,
   IconoPapelera,
 } from "@/components/icons";
@@ -140,6 +141,7 @@ export function Planificador({
   guardando,
   firebaseListo,
   planes,
+  planesHechos,
   planVisible,
   onVerPlan,
   onBorrarPlan,
@@ -161,6 +163,8 @@ export function Planificador({
   guardando: boolean;
   firebaseListo: boolean;
   planes: RutaPlaneada[] | null;
+  /** Ids de planes hechos por mí (emparejado de Strava o marcado manual). */
+  planesHechos?: Set<string>;
   planVisible: RutaPlaneada | null;
   onVerPlan: (plan: RutaPlaneada | null) => void;
   onBorrarPlan: (id: string) => void;
@@ -390,6 +394,14 @@ export function Planificador({
                       : "text-hielo-200 hover:bg-roca-900"
                   }`}
                 >
+                  {planesHechos?.has(plan.id) && (
+                    <span
+                      className="mr-1.5 inline-block align-[-2px] text-pino-300"
+                      title="Hecha (emparejada con una salida)"
+                    >
+                      <IconoHecho width={12} height={12} />
+                    </span>
+                  )}
                   {plan.nombre}
                   <span className="ml-2 text-xs text-roca-300">
                     {plan.distanciaKm.toLocaleString("es-ES")} km

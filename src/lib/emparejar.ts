@@ -1,11 +1,12 @@
 import type { ElementoGeografico } from "@/types/catalogo";
 import type { Ruta } from "@/types/rutas";
+import type { RutaPlaneada } from "@/types/plan";
 
 /**
  * Emparejado geográfico de una traza de Strava con el catálogo:
  *  - un elemento coincide si la traza pasa a menos de RADIO_ELEMENTO_M
- *  - una ruta coincide si al menos COBERTURA_MINIMA de sus puntos quedan
- *    a menos de RADIO_RUTA_M de la traza
+ *  - una ruta (o un plan propio) coincide si al menos COBERTURA_MINIMA de
+ *    sus puntos quedan a menos de RADIO_RUTA_M de la traza
  * Los puntos de la traza se indexan en una rejilla para que la búsqueda
  * de vecinos sea barata.
  */
@@ -80,14 +81,45 @@ class IndiceTraza {
 export interface Coincidencias {
   elementos: ElementoGeografico[];
   rutas: Ruta[];
+  planes: RutaPlaneada[];
+}
+
+/** Fracción de los puntos de una línea a menos de RADIO_RUTA_M de la traza. */
+function cobertura(
+  indice: IndiceTraza,
+  partes: [number, number][][],
+  caja: [number, number, number, number],
+): number {
+  const [oeste, sur, este, norte] = caja;
+  const margen = 0.005;
+  let total = 0;
+  let cubiertos = 0;
+  for (const parte of partes) {
+    for (const punto of parte) {
+      total += 1;
+      const [lng, lat] = punto;
+      // Fuera de la caja de la traza no puede estar cubierto: se evita
+      // la consulta a la rejilla pero el punto sí cuenta en el total
+      if (
+        lng < oeste - margen ||
+        lng > este + margen ||
+        lat < sur - margen ||
+        lat > norte + margen
+      )
+        continue;
+      if (indice.cerca(punto, RADIO_RUTA_M)) cubiertos += 1;
+    }
+  }
+  return total > 0 ? cubiertos / total : 0;
 }
 
 export function emparejarTraza(
   traza: [number, number][],
   elementos: Iterable<ElementoGeografico>,
   rutas: Iterable<Ruta>,
+  planes: Iterable<RutaPlaneada> = [],
 ): Coincidencias {
-  if (traza.length < 2) return { elementos: [], rutas: [] };
+  if (traza.length < 2) return { elementos: [], rutas: [], planes: [] };
   const indice = new IndiceTraza(traza);
 
   let [oeste, sur, este, norte] = [Infinity, Infinity, -Infinity, -Infinity];
@@ -98,8 +130,9 @@ export function emparejarTraza(
     norte = Math.max(norte, lat);
   }
   const margen = 0.005;
+  const caja: [number, number, number, number] = [oeste, sur, este, norte];
 
-  const coincidencias: Coincidencias = { elementos: [], rutas: [] };
+  const coincidencias: Coincidencias = { elementos: [], rutas: [], planes: [] };
 
   for (const elemento of elementos) {
     const { lng, lat } = elemento.coordenadas;
@@ -111,26 +144,14 @@ export function emparejarTraza(
   }
 
   for (const ruta of rutas) {
-    let total = 0;
-    let cubiertos = 0;
-    for (const parte of ruta.partes) {
-      for (const punto of parte) {
-        total += 1;
-        const [lng, lat] = punto;
-        // Fuera de la caja de la traza no puede estar cubierto: se evita
-        // la consulta a la rejilla pero el punto sí cuenta en el total
-        if (
-          lng < oeste - margen ||
-          lng > este + margen ||
-          lat < sur - margen ||
-          lat > norte + margen
-        )
-          continue;
-        if (indice.cerca(punto, RADIO_RUTA_M)) cubiertos += 1;
-      }
-    }
-    if (total > 0 && cubiertos / total >= COBERTURA_MINIMA) {
+    if (cobertura(indice, ruta.partes, caja) >= COBERTURA_MINIMA) {
       coincidencias.rutas.push(ruta);
+    }
+  }
+
+  for (const plan of planes) {
+    if (cobertura(indice, [plan.linea], caja) >= COBERTURA_MINIMA) {
+      coincidencias.planes.push(plan);
     }
   }
 

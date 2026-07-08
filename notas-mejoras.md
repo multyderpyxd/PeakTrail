@@ -6,11 +6,12 @@ correcta; esto es margen de mejora.
 
 ## Importación de Strava
 
-- **Importación incremental**: hoy cada importación revisa las ~1000
-  actividades más recientes (5 peticiones). Guardar la época de la última
-  importación (localStorage o Firestore) y pasar `after=` al API para pedir
-  solo lo nuevo. Menos peticiones y respuesta inmediata en importaciones
-  rutinarias.
+- ~~**Importación incremental**~~: hecha en el Hito 19 (caché local en
+  `src/lib/actividades.ts` con `ultimaEpoca` y `after=` al API; solo se
+  emparejan las actividades nuevas).
+- ~~**Emparejar también los planes propios**~~: hecho en el Hito 19 (tipo
+  `plan` en realizados, cobertura 70 %/250 m como las rutas, marca «hecha»
+  en la lista del planificador).
 - **Histórico completo la primera vez**: el tope de 5 páginas puede dejar
   fuera actividades antiguas de cuentas muy activas. Primera importación con
   paginación extendida y control del límite de peticiones (100/15 min),
@@ -36,9 +37,12 @@ correcta; esto es margen de mejora.
 - **Webhooks de Strava**: importación automática al subir una actividad,
   sin pulsar el botón. Requiere endpoint de suscripción con verificación y
   algo de estado en servidor; valorar si compensa para ~10 usuarios.
-- **Emparejar también los planes propios**: hoy solo se empareja contra el
-  catálogo (elementos y rutas GR/PR/SL); las rutas del planificador podrían
-  marcarse como realizadas igual.
+- **Filtros de la capa «Mis actividades»**: filtrar las trazas por año o por
+  deporte, y un modo «mapa de calor» (opacidad acumulada) cuando haya muchas
+  salidas solapadas por las mismas sendas.
+- **Actividades del grupo**: hoy la capa es por dispositivo (localStorage).
+  Compartir las trazas con el grupo exigiría guardarlas en Firestore y
+  decidir la cuestión de privacidad (cada uno elige si publica las suyas).
 
 ## Fotos y social (Hito 10)
 

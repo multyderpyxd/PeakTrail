@@ -16,6 +16,8 @@ export interface PreferenciasVista {
   toponimos: boolean;
   /** Cota mínima (m) de los picos mostrados; 0 = todos. */
   altitudMinima: number;
+  /** Capa «Mis actividades» de Strava visible. */
+  mostrarActividades: boolean;
 }
 
 // v2: el Hito 12 añadió collados y cota mínima; las preferencias v1 no
@@ -55,6 +57,9 @@ export function leerPreferencias(): Partial<PreferenciasVista> {
       datos.altitudMinima <= 3000
     ) {
       limpias.altitudMinima = datos.altitudMinima;
+    }
+    if (typeof datos.mostrarActividades === "boolean") {
+      limpias.mostrarActividades = datos.mostrarActividades;
     }
     return limpias;
   } catch {

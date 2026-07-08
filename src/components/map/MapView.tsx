@@ -64,7 +64,14 @@ import {
   type Realizado,
 } from "@/lib/realizados";
 import { Explorador } from "./Explorador";
+import { FichaActividad } from "./FichaActividad";
 import { Progreso } from "./Progreso";
+import {
+  COLOR_ACTIVIDAD,
+  coleccionActividades,
+} from "./actividades-capa";
+import { leerActividades } from "@/lib/actividades";
+import type { ActividadStrava } from "@/lib/strava";
 import { procesarRetornoStrava } from "@/lib/strava";
 import { guardarPreferencias, leerPreferencias } from "@/lib/preferencias";
 
@@ -75,6 +82,9 @@ const CAPA_RUTAS_PULSABLE = "rutas-pulsable";
 const CAPA_RUTA_DESTACADA = "ruta-destacada";
 const CAPA_RUTA_EXTREMOS = "ruta-extremos";
 const CAPA_RUTA_CURSOR = "ruta-cursor";
+const CAPA_ACTIVIDADES = "actividades";
+const CAPA_ACTIVIDADES_CASCO = "actividades-casco";
+const CAPA_ACTIVIDADES_PULSABLE = "actividades-pulsable";
 const CAPA_PLAN_LINEA = "plan-linea";
 const CAPA_PLAN_PULSABLE = "plan-pulsable";
 const CAPA_PLAN_PUNTOS = "plan-puntos";
@@ -87,7 +97,8 @@ const COLECCION_VACIA: GeoJSON.FeatureCollection = {
 
 type Seleccion =
   | { clase: "elemento"; elemento: ElementoGeografico }
-  | { clase: "ruta"; ruta: Ruta };
+  | { clase: "ruta"; ruta: Ruta }
+  | { clase: "actividad"; actividad: ActividadStrava };
 
 function crearWaypoint(lngLat: [number, number]): Waypoint {
   const id =
@@ -268,6 +279,12 @@ export default function MapView() {
   ]);
   // Solo se pintan los picos desde esta cota (los demás tipos no filtran)
   const [altitudMinima, setAltitudMinima] = useState(0);
+  // Actividades de Strava del dispositivo (caché local) y su capa en el mapa
+  const [actividades, setActividades] = useState<ActividadStrava[] | null>(
+    null,
+  );
+  const [mostrarActividades, setMostrarActividades] = useState(false);
+  const actividadesRef = useRef<Map<number, ActividadStrava>>(new Map());
   const [totalesTipos, setTotalesTipos] = useState<Record<
     TipoElemento,
     number
@@ -288,6 +305,10 @@ export default function MapView() {
     if (prefs.ambiente) setAmbiente(prefs.ambiente);
     if (prefs.toponimos !== undefined) setToponimos(prefs.toponimos);
     if (prefs.altitudMinima !== undefined) setAltitudMinima(prefs.altitudMinima);
+    if (prefs.mostrarActividades !== undefined)
+      setMostrarActividades(prefs.mostrarActividades);
+    // La caché de actividades vive en localStorage: solo tras montar
+    setActividades(leerActividades()?.actividades ?? null);
   }, []);
 
   useEffect(() => {
@@ -297,8 +318,16 @@ export default function MapView() {
       ambiente,
       toponimos,
       altitudMinima,
+      mostrarActividades,
     });
-  }, [tiposActivos, redesActivas, ambiente, toponimos, altitudMinima]);
+  }, [
+    tiposActivos,
+    redesActivas,
+    ambiente,
+    toponimos,
+    altitudMinima,
+    mostrarActividades,
+  ]);
 
   useEffect(() => {
     if (!contenedorRef.current) return;
@@ -363,6 +392,42 @@ export default function MapView() {
         id: CAPA_RUTAS_PULSABLE,
         type: "line",
         source: CAPA_RUTAS,
+        paint: { "line-color": "#000000", "line-width": 14, "line-opacity": 0.01 },
+      });
+
+      // Mis actividades de Strava: encima de las redes de senderos, debajo
+      // de los marcadores; ocultas hasta que el usuario active la capa
+      mapa.addSource(CAPA_ACTIVIDADES, {
+        type: "geojson",
+        data: COLECCION_VACIA,
+      });
+      mapa.addLayer({
+        id: CAPA_ACTIVIDADES_CASCO,
+        type: "line",
+        source: CAPA_ACTIVIDADES,
+        layout: {
+          "line-cap": "round",
+          "line-join": "round",
+          visibility: "none",
+        },
+        paint: { "line-color": "#16130f", "line-width": 4, "line-opacity": 0.55 },
+      });
+      mapa.addLayer({
+        id: CAPA_ACTIVIDADES,
+        type: "line",
+        source: CAPA_ACTIVIDADES,
+        layout: {
+          "line-cap": "round",
+          "line-join": "round",
+          visibility: "none",
+        },
+        paint: { "line-color": COLOR_ACTIVIDAD, "line-width": 2.2 },
+      });
+      mapa.addLayer({
+        id: CAPA_ACTIVIDADES_PULSABLE,
+        type: "line",
+        source: CAPA_ACTIVIDADES,
+        layout: { visibility: "none" },
         paint: { "line-color": "#000000", "line-width": 14, "line-opacity": 0.01 },
       });
 
@@ -507,11 +572,13 @@ export default function MapView() {
         setWaypoints((w) => [...w, crearWaypoint(clic)]);
         return;
       }
-      const capas = [CAPA_ELEMENTOS, CAPA_RUTAS_PULSABLE].filter((c) =>
-        mapa.getLayer(c),
-      );
+      const capas = [
+        CAPA_ELEMENTOS,
+        CAPA_ACTIVIDADES_PULSABLE,
+        CAPA_RUTAS_PULSABLE,
+      ].filter((c) => mapa.getLayer(c));
       // queryRenderedFeatures devuelve primero lo pintado más arriba:
-      // los marcadores tienen prioridad sobre las rutas
+      // marcadores sobre actividades, y actividades sobre rutas
       const [pulsado] = mapa.queryRenderedFeatures(e.point, { layers: capas });
       setSentidoInvertido(false);
       if (!pulsado) {
@@ -526,6 +593,12 @@ export default function MapView() {
         setSeleccion({ clase: "elemento", elemento });
         mapa.easeTo({ center: elemento.coordenadas, duration: 600 });
         destellarElementoRef.current(elemento, 650);
+      } else if (pulsado.layer.id === CAPA_ACTIVIDADES_PULSABLE) {
+        const actividad = actividadesRef.current.get(
+          Number(pulsado.properties.id),
+        );
+        if (!actividad) return;
+        setSeleccion({ clase: "actividad", actividad });
       } else {
         const ruta = rutasRef.current?.get(String(pulsado.properties.id));
         if (!ruta) return;
@@ -536,7 +609,11 @@ export default function MapView() {
         });
       }
     });
-    for (const capa of [CAPA_ELEMENTOS, CAPA_RUTAS_PULSABLE]) {
+    for (const capa of [
+      CAPA_ELEMENTOS,
+      CAPA_ACTIVIDADES_PULSABLE,
+      CAPA_RUTAS_PULSABLE,
+    ]) {
       mapa.on("mouseenter", capa, () => {
         mapa.getCanvas().style.cursor = "pointer";
       });
@@ -588,6 +665,42 @@ export default function MapView() {
       mapa.setFilter(capa, filtro);
     }
   }, [redesActivas, cargado]);
+
+  // Capa «Mis actividades»: datos desde la caché local y visibilidad según
+  // la preferencia; el índice por id resuelve el clic
+  useEffect(() => {
+    const mapa = mapaRef.current;
+    if (!mapa || !cargado) return;
+    actividadesRef.current = new Map(
+      (actividades ?? []).map((a) => [a.id, a]),
+    );
+    (mapa.getSource(CAPA_ACTIVIDADES) as maplibregl.GeoJSONSource).setData(
+      actividades ? coleccionActividades(actividades) : COLECCION_VACIA,
+    );
+    const visibilidad = mostrarActividades ? "visible" : "none";
+    for (const capa of [
+      CAPA_ACTIVIDADES,
+      CAPA_ACTIVIDADES_CASCO,
+      CAPA_ACTIVIDADES_PULSABLE,
+    ]) {
+      mapa.setLayoutProperty(capa, "visibility", visibilidad);
+    }
+    setSeleccion((sel) =>
+      sel?.clase === "actividad" && !mostrarActividades ? null : sel,
+    );
+  }, [actividades, mostrarActividades, cargado]);
+
+  // Planes propios marcados como realizados (p. ej. por el emparejado Strava)
+  const planesHechos = useMemo(() => {
+    const hechos = new Set<string>();
+    if (!sesion.usuario) return hechos;
+    for (const r of realizados.values()) {
+      if (r.tipo === "plan" && r.usuario === sesion.usuario.uid) {
+        hechos.add(r.refId);
+      }
+    }
+    return hechos;
+  }, [realizados, sesion.usuario]);
 
   // Ruta tal y como se muestra: en su sentido original o invertida
   const rutaVista = useMemo(() => {
@@ -1186,6 +1299,9 @@ export default function MapView() {
           redesActivas={redesActivas}
           onAlternarRed={alternarRed}
           totalesRutas={totalesRutas}
+          numActividades={actividades?.length ?? null}
+          mostrarActividades={mostrarActividades}
+          onAlternarActividades={() => setMostrarActividades((v) => !v)}
           toponimos={toponimos}
           onAlternarToponimos={() => setToponimos((v) => !v)}
           ambiente={ambiente}
@@ -1214,6 +1330,7 @@ export default function MapView() {
           guardando={guardandoPlan}
           firebaseListo={isFirebaseConfigured}
           planes={planes}
+          planesHechos={planesHechos}
           planVisible={planVisible}
           onVerPlan={verPlan}
           onBorrarPlan={borrarPlanGuardado}
@@ -1231,6 +1348,9 @@ export default function MapView() {
           rutas={rutasRef.current}
           totalRutas={rutasRef.current?.size ?? 0}
           onCerrar={() => setVerProgreso(false)}
+          onActividades={(todas) =>
+            setActividades(todas.length > 0 ? todas : null)
+          }
         />
       )}
 
@@ -1265,6 +1385,12 @@ export default function MapView() {
           }}
           usuario={sesion.usuario}
           esInvitado={sesion.invitado}
+        />
+      )}
+      {!modoPlan && seleccion?.clase === "actividad" && (
+        <FichaActividad
+          actividad={seleccion.actividad}
+          onCerrar={() => setSeleccion(null)}
         />
       )}
       {!modoPlan && rutaVista && (

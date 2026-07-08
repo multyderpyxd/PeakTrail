@@ -10,6 +10,7 @@ import {
   IconoRefugio,
   IconoToponimo,
 } from "@/components/icons";
+import { COLOR_ACTIVIDAD } from "./actividades-capa";
 import { COLOR_TIPO } from "./marcadores";
 import { COLOR_RED, ETIQUETA_RED } from "./rutas";
 import {
@@ -84,6 +85,9 @@ export function PanelCapas({
   redesActivas,
   onAlternarRed,
   totalesRutas,
+  numActividades,
+  mostrarActividades,
+  onAlternarActividades,
   toponimos,
   onAlternarToponimos,
   ambiente,
@@ -99,6 +103,10 @@ export function PanelCapas({
   redesActivas: RedRuta[];
   onAlternarRed: (red: RedRuta) => void;
   totalesRutas: Record<RedRuta, number> | null;
+  /** Actividades de Strava en caché; null si nunca se importaron. */
+  numActividades: number | null;
+  mostrarActividades: boolean;
+  onAlternarActividades: () => void;
   toponimos: boolean;
   onAlternarToponimos: () => void;
   ambiente: Ambiente;
@@ -231,6 +239,30 @@ export function PanelCapas({
                   />
                 );
               })}
+            </>
+          )}
+
+          {numActividades !== null && (
+            <>
+              <div className="my-2 border-t border-roca-800" />
+              <TituloSeccion>Mis actividades</TituloSeccion>
+              <Fila
+                activo={mostrarActividades}
+                onClick={onAlternarActividades}
+                etiqueta="Salidas de Strava"
+                detalle={String(numActividades)}
+                icono={
+                  <span
+                    aria-hidden="true"
+                    className="h-1 w-4 rounded-full"
+                    style={{
+                      backgroundColor: mostrarActividades
+                        ? COLOR_ACTIVIDAD
+                        : "#6e6353",
+                    }}
+                  />
+                }
+              />
             </>
           )}
 

@@ -17,8 +17,14 @@ export interface ActividadStrava {
   nombre: string;
   /** YYYY-MM-DD, en hora local del atleta. */
   fecha: string;
+  /** Época Unix (segundos) del inicio en UTC; para pedir solo lo nuevo. */
+  epoca: number;
   deporte: string;
   distanciaKm: number;
+  /** Tiempo en movimiento, en segundos. */
+  tiempoMovS: number;
+  /** Desnivel positivo acumulado según Strava, en metros. */
+  desnivelM: number;
   /** summary_polyline codificada; null si la actividad no tiene mapa. */
   polilinea: string | null;
 }
@@ -103,23 +109,33 @@ async function conexionValida(): Promise<ConexionStrava> {
   return renovada;
 }
 
-/** Descarga las actividades más recientes (hasta ~1000, 5 peticiones). */
+/**
+ * Descarga actividades (hasta maxPaginas × 200). Con `despuesDe` (época Unix)
+ * pide a Strava solo las posteriores a ese instante: importación incremental.
+ */
 export async function obtenerActividades(
   maxPaginas = 5,
+  despuesDe?: number,
 ): Promise<ActividadStrava[]> {
   const conexion = await conexionValida();
   const actividades: ActividadStrava[] = [];
   for (let pagina = 1; pagina <= maxPaginas; pagina++) {
-    const respuesta = await fetch(`/api/strava/actividades?page=${pagina}`, {
-      headers: { Authorization: `Bearer ${conexion.accessToken}` },
-    });
+    const parametros = new URLSearchParams({ page: String(pagina) });
+    if (despuesDe) parametros.set("after", String(despuesDe));
+    const respuesta = await fetch(
+      `/api/strava/actividades?${parametros.toString()}`,
+      { headers: { Authorization: `Bearer ${conexion.accessToken}` } },
+    );
     if (!respuesta.ok) throw new Error("No se pudieron leer las actividades");
     const lote: Array<{
       id: number;
       name: string;
+      start_date: string;
       start_date_local: string;
       sport_type: string;
       distance: number;
+      moving_time: number;
+      total_elevation_gain: number;
       map?: { summary_polyline?: string | null };
     }> = await respuesta.json();
     for (const a of lote) {
@@ -127,8 +143,11 @@ export async function obtenerActividades(
         id: a.id,
         nombre: a.name,
         fecha: a.start_date_local.slice(0, 10),
+        epoca: Math.floor(Date.parse(a.start_date) / 1000),
         deporte: a.sport_type,
         distanciaKm: +(a.distance / 1000).toFixed(1),
+        tiempoMovS: a.moving_time ?? 0,
+        desnivelM: Math.round(a.total_elevation_gain ?? 0),
         polilinea: a.map?.summary_polyline || null,
       });
     }

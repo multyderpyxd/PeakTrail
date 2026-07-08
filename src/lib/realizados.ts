@@ -19,11 +19,11 @@ export interface Realizado {
   id: string;
   usuario: string; // uid
   nombreUsuario: string;
-  tipo: "elemento" | "ruta";
+  tipo: "elemento" | "ruta" | "plan";
   refId: string;
   /** Nombre denormalizado para listados sin cruzar con el catálogo. */
   nombre: string;
-  /** pico | ibon | refugio para elementos; gr | pr | sl para rutas. */
+  /** pico | ibon | refugio | collado para elementos; gr | pr | sl para rutas; plan. */
   categoria: string;
   /** Fecha de la actividad, YYYY-MM-DD. */
   fecha: string;

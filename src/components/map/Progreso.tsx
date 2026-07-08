@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
 import type { Comunidad } from "@/types/catalogo";
 import type { Realizado } from "@/lib/realizados";
+import type { ActividadStrava } from "@/lib/strava";
 import { expulsar, invitar, listarInvitados, type Invitado } from "@/lib/invitados";
 import type { Ruta } from "@/types/rutas";
 import { SeccionStrava } from "./SeccionStrava";
@@ -190,6 +191,7 @@ export function Progreso({
   rutas,
   totalRutas,
   onCerrar,
+  onActividades,
 }: {
   realizados: Map<string, Realizado>;
   usuario: User | null;
@@ -198,6 +200,7 @@ export function Progreso({
   rutas: Map<string, Ruta> | null;
   totalRutas: number;
   onCerrar: () => void;
+  onActividades?: (todas: ActividadStrava[]) => void;
 }) {
   const { propios, rutasPropias, hechosPorBanda, grupo } = useMemo(() => {
     const propios: Record<string, number> = { pico: 0, collado: 0, ibon: 0, refugio: 0 };
@@ -461,7 +464,12 @@ export function Progreso({
         </div>
 
         {usuario && esInvitado && (
-          <SeccionStrava usuario={usuario} realizados={realizados} rutas={rutas} />
+          <SeccionStrava
+            usuario={usuario}
+            realizados={realizados}
+            rutas={rutas}
+            onActividades={onActividades}
+          />
         )}
 
         {esAdmin && usuario?.email && (

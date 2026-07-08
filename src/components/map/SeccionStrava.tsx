@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type { User } from "firebase/auth";
+import { borrarActividades, sincronizarActividades } from "@/lib/actividades";
 import { decodificarPolilinea, emparejarTraza } from "@/lib/emparejar";
+import { isFirebaseConfigured, listarPlanes } from "@/lib/planes";
 import {
   idRealizado,
   marcarRealizado,
@@ -9,28 +11,31 @@ import {
 import {
   conectarStrava,
   conexionStrava,
-  DEPORTES_MONTANA,
   desconectarStrava,
-  obtenerActividades,
   stravaConfigurado,
+  type ActividadStrava,
 } from "@/lib/strava";
 import { elementosPorId } from "./elementos";
 import type { Ruta } from "@/types/rutas";
 import { IconoActividad } from "@/components/icons";
 
 /**
- * Conexión e importación de Strava dentro del panel de progreso: descarga
- * las actividades del usuario, las empareja geográficamente con el catálogo
- * y marca como realizados los elementos y rutas que coincidan.
+ * Conexión e importación de Strava dentro del panel de progreso. La
+ * importación es incremental: las actividades se guardan en una caché local
+ * (que alimenta la capa «Mis actividades» del mapa) y a Strava solo se le
+ * piden las posteriores a la última sincronización; únicamente las nuevas se
+ * emparejan con el catálogo, las rutas y los planes propios.
  */
 export function SeccionStrava({
   usuario,
   realizados,
   rutas,
+  onActividades,
 }: {
   usuario: User;
   realizados: Map<string, Realizado>;
   rutas: Map<string, Ruta> | null;
+  onActividades?: (todas: ActividadStrava[]) => void;
 }) {
   const [conexion, setConexion] = useState(conexionStrava);
   const [estado, setEstado] = useState<string | null>(null);
@@ -43,19 +48,31 @@ export function SeccionStrava({
     setImportando(true);
     try {
       setEstado("Descargando actividades…");
-      const actividades = await obtenerActividades();
-      const conTraza = actividades.filter(
-        (a) => a.polilinea && DEPORTES_MONTANA.has(a.deporte),
-      );
-      setEstado(`Emparejando ${conTraza.length} actividades…`);
+      const { todas, nuevas } = await sincronizarActividades();
+      onActividades?.(todas);
+      if (nuevas.length === 0) {
+        setEstado(
+          "Sin actividades nuevas desde la última importación. La capa «Mis actividades» está en Capas y filtros.",
+        );
+        return;
+      }
+      setEstado(`Emparejando ${nuevas.length} actividades nuevas…`);
+      const planes = isFirebaseConfigured
+        ? await listarPlanes().catch(() => [])
+        : [];
 
       let novedades = 0;
-      for (const actividad of conTraza) {
+      for (const actividad of nuevas) {
         const traza = decodificarPolilinea(actividad.polilinea!);
-        const { elementos, rutas: rutasCoincidentes } = emparejarTraza(
+        const {
+          elementos,
+          rutas: rutasCoincidentes,
+          planes: planesCoincidentes,
+        } = emparejarTraza(
           traza,
           elementosPorId.values(),
           rutas?.values() ?? [],
+          planes,
         );
         const nuevos: Array<{
           tipo: Realizado["tipo"];
@@ -75,6 +92,12 @@ export function SeccionStrava({
             nombre: r.nombre,
             categoria: r.red,
           })),
+          ...planesCoincidentes.map((p) => ({
+            tipo: "plan" as const,
+            refId: p.id,
+            nombre: p.nombre,
+            categoria: "plan",
+          })),
         ];
         for (const nuevo of nuevos) {
           if (realizados.has(idRealizado(usuario.uid, nuevo.tipo, nuevo.refId)))
@@ -90,7 +113,7 @@ export function SeccionStrava({
         }
       }
       setEstado(
-        `${conTraza.length} actividades revisadas · ${novedades} ${
+        `${nuevas.length} ${nuevas.length === 1 ? "actividad nueva" : "actividades nuevas"} · ${novedades} ${
           novedades === 1 ? "novedad marcada" : "novedades marcadas"
         }`,
       );
@@ -120,6 +143,8 @@ export function SeccionStrava({
               type="button"
               onClick={() => {
                 desconectarStrava();
+                borrarActividades();
+                onActividades?.([]);
                 setConexion(null);
                 setEstado(null);
               }}
