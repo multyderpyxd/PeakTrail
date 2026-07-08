@@ -24,6 +24,19 @@ const OSRM_A_PIE = "https://routing.openstreetmap.de/routed-foot/route/v1/foot";
 /** Distancia clic-camino por debajo de la cual el punto se pega al camino. */
 export const UMBRAL_SNAP_M = 45;
 
+/**
+ * Salvaguarda contra rodeos absurdos: si la ruta por senderos multiplica la
+ * distancia directa por más de este factor Y además se aleja del tramo más
+ * que la propia distancia directa, se degrada a línea recta. Las dos
+ * condiciones juntas dejan vivir los rodeos legítimos (zigzags de ladera,
+ * bordear un ibón o un circo: largos pero pegados al tramo) y matan el
+ * patrón «bajar a la senda del valle y volver a subir» entre puntos campo a
+ * través (medido en la ladera de Góriz: 4,6 km por red para 367 m directos
+ * porque dos sendas próximas no conectan en el grafo OSM).
+ */
+export const FACTOR_RODEO_MAX = 3;
+const SUELO_ALEJAMIENTO_M = 150;
+
 const TIMEOUT_BROUTER_MS = 10000;
 const TIMEOUT_OSRM_MS = 6000;
 
@@ -98,11 +111,43 @@ async function nucleoOsrm(
   return coords;
 }
 
+/** Máxima distancia de la línea al segmento a-b (proyección plana local). */
+function alejamientoMaximoM(
+  linea: [number, number][],
+  a: [number, number],
+  b: [number, number],
+): number {
+  const rad = Math.PI / 180;
+  const kx = 111320 * Math.cos(((a[1] + b[1]) / 2) * rad);
+  const ky = 111320;
+  const bx = (b[0] - a[0]) * kx;
+  const by = (b[1] - a[1]) * ky;
+  const len2 = bx * bx + by * by;
+  let max = 0;
+  for (const p of linea) {
+    const px = (p[0] - a[0]) * kx;
+    const py = (p[1] - a[1]) * ky;
+    const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, (px * bx + py * by) / len2));
+    const d = Math.hypot(px - t * bx, py - t * by);
+    if (d > max) max = d;
+  }
+  return max;
+}
+
+function longitudMetros(linea: [number, number][]): number {
+  let total = 0;
+  for (let i = 1; i < linea.length; i++) {
+    total += distanciaMetros(linea[i - 1], linea[i]);
+  }
+  return total;
+}
+
 /**
  * Compone el segmento final a partir de la geometría de red: decide por cada
  * extremo entre snap (el punto visible se mueve al enganche) o conector recto
- * (el punto visible se queda en el clic y se une con una recta al enganche).
- * Exportada para poder probarla sin red.
+ * (el punto visible se queda en el clic y se une con una recta al enganche),
+ * y aplica la salvaguarda de rodeo (ver FACTOR_RODEO_MAX). Exportada para
+ * poder probarla sin red.
  */
 export function componerSegmento(
   a: [number, number],
@@ -121,6 +166,13 @@ export function componerSegmento(
     ...red,
     ...(snapB ? [] : [b]),
   ];
+  const directa = Math.max(distanciaMetros(a, b), 25);
+  if (
+    longitudMetros(coords) > FACTOR_RODEO_MAX * directa &&
+    alejamientoMaximoM(coords, a, b) > Math.max(directa, SUELO_ALEJAMIENTO_M)
+  ) {
+    return segmentoRecto(a, b);
+  }
   return { coords, porSenderos: true, inicio, fin };
 }
 

@@ -77,6 +77,50 @@ describe("componerSegmento (snap y conectores)", () => {
     expect(componerSegmento(BASE, b, red2).inicio).toEqual(BASE);
   });
 
+  it("rodeo absurdo (bajar a la senda del valle y volver): degrada a recta", () => {
+    // A y B a ~400 m entre sí; la única «red» baja 800 m al sur, recorre un
+    // poco y vuelve a subir: el patrón peine de la ladera de Góriz
+    const bCerca = desplazado(400, "E");
+    const abajo = 800 / 111320;
+    const red: [number, number][] = [
+      [BASE[0], BASE[1] - abajo],
+      [bCerca[0] * 0.5 + BASE[0] * 0.5, BASE[1] - abajo],
+      [bCerca[0], bCerca[1] - abajo],
+    ];
+    const s = componerSegmento(BASE, bCerca, red);
+    expect(s.porSenderos).toBe(false);
+    expect(s.coords).toEqual([BASE, bCerca]);
+  });
+
+  it("rodeo largo pero pegado al tramo (zigzags de ladera): se mantiene por senda", () => {
+    // total > 3x la directa, pero serpentea a <100 m de la línea A-B
+    const bCerca = desplazado(300, "E");
+    const lado = 80 / 111320;
+    const red: [number, number][] = [];
+    for (let i = 0; i <= 30; i++) {
+      const f = i / 30;
+      red.push([
+        BASE[0] + (bCerca[0] - BASE[0]) * f,
+        BASE[1] + (i % 2 === 0 ? lado : -lado),
+      ]);
+    }
+    const s = componerSegmento(BASE, bCerca, red);
+    expect(s.porSenderos).toBe(true);
+  });
+
+  it("rodeo moderado (bordear un circo a 2x): se mantiene por senda", () => {
+    const bCirco = desplazado(800, "E");
+    const arco = 500 / 111320;
+    const red: [number, number][] = [
+      BASE,
+      [BASE[0] * 0.75 + bCirco[0] * 0.25, BASE[1] + arco],
+      [BASE[0] * 0.25 + bCirco[0] * 0.75, BASE[1] + arco],
+      bCirco,
+    ];
+    const s = componerSegmento(BASE, bCirco, red);
+    expect(s.porSenderos).toBe(true);
+  });
+
   it("la geometría siempre empieza en inicio y termina en fin (la línea llega al marcador)", () => {
     for (const distA of [5, 100]) {
       for (const distB of [5, 100]) {

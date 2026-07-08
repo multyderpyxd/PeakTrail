@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   distanciaMetros,
   enrutarSegmento,
+  FACTOR_RODEO_MAX,
   UMBRAL_SNAP_M,
 } from "@/lib/enrutador";
 
@@ -109,5 +110,22 @@ describe.skipIf(!process.env.PROBAR_RED)("enrutado real (Pirineo)", () => {
     const s = await enrutarSegmento(REFUGIO_GORIZ, cerca, true);
     expect(s.coords.length).toBeGreaterThanOrEqual(2);
     expect(longitudMetros(s.coords)).toBeLessThan(3000);
+  });
+
+  it("puntos campo a través en la ladera de Góriz: nunca un rodeo absurdo (patrón peine)", async () => {
+    // Caso real medido: dos sendas próximas que no conectan en el grafo OSM
+    // hacían que 367 m directos se enrutasen con 4,6 km por el valle (12,6x)
+    const A: [number, number] = [0.006, 42.6685];
+    const B: [number, number] = [0.01, 42.67];
+    const s = await enrutarSegmento(A, B, true);
+    const directa = distanciaMetros(A, B);
+    const total = longitudMetros(s.coords);
+    if (s.porSenderos) {
+      // si mantiene la senda, el rodeo debe ser razonable
+      expect(total).toBeLessThanOrEqual(FACTOR_RODEO_MAX * directa * 1.05);
+    } else {
+      // degradado a recta: los puntos quedan exactamente donde se clicó
+      expect(s.coords).toEqual([A, B]);
+    }
   });
 });
