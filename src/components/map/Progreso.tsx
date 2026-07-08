@@ -4,9 +4,86 @@ import type { Realizado } from "@/lib/realizados";
 import { expulsar, invitar, listarInvitados, type Invitado } from "@/lib/invitados";
 import type { Ruta } from "@/types/rutas";
 import { SeccionStrava } from "./SeccionStrava";
-import { TOTALES } from "./elementos";
+import { elementosPorId, TOTALES } from "./elementos";
 import { COLOR_TIPO } from "./marcadores";
-import { IconoCerrar, IconoHecho, IconoPapelera } from "@/components/icons";
+import { GraficoActividad, type CuboMensual } from "./GraficoActividad";
+import {
+  IconoCerrar,
+  IconoCollado,
+  IconoHecho,
+  IconoIbon,
+  IconoPapelera,
+  IconoPico,
+  IconoRefugio,
+  IconoTrazar,
+} from "@/components/icons";
+
+/** Bandas de altitud de los picos: mismos cortes que el deslizador del panel de capas. */
+const BANDAS_ALTITUD = [
+  { min: 0, max: 2000, etiqueta: "< 2.000 m" },
+  { min: 2000, max: 2500, etiqueta: "2.000–2.499 m" },
+  { min: 2500, max: 3000, etiqueta: "2.500–2.999 m" },
+  { min: 3000, max: Infinity, etiqueta: "≥ 3.000 m" },
+] as const;
+
+function bandaDe(altitud: number): number {
+  return BANDAS_ALTITUD.findIndex((b) => altitud >= b.min && altitud < b.max);
+}
+
+function BarraProgreso({
+  etiqueta,
+  hechos,
+  total,
+  color,
+}: {
+  etiqueta: string;
+  hechos: number;
+  total: number;
+  color: string;
+}) {
+  return (
+    <li>
+      <div className="flex items-baseline justify-between text-xs">
+        <span className="text-hielo-200">{etiqueta}</span>
+        <span className="text-roca-300">
+          <span className="font-display text-sm text-nieve">{hechos}</span> de{" "}
+          {total}
+        </span>
+      </div>
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-roca-800">
+        <div
+          className="h-full rounded-full"
+          style={{
+            width: `${total > 0 ? Math.min(100, (hechos / total) * 100) : 0}%`,
+            backgroundColor: color,
+          }}
+        />
+      </div>
+    </li>
+  );
+}
+
+function Pendiente({
+  icono,
+  numero,
+  etiqueta,
+}: {
+  icono: React.ReactNode;
+  numero: number;
+  etiqueta: string;
+}) {
+  return (
+    <div className="rounded border border-roca-700 bg-roca-900/70 px-2 py-1.5 text-center">
+      <span className="mx-auto flex h-5 w-5 items-center justify-center text-roca-300">
+        {icono}
+      </span>
+      <p className="font-display text-lg leading-none text-nieve">{numero}</p>
+      <p className="mt-0.5 text-[9px] uppercase leading-tight tracking-widest text-roca-300">
+        {etiqueta}
+      </p>
+    </div>
+  );
+}
 
 function Invitaciones({ emailPropio }: { emailPropio: string }) {
   const [invitados, setInvitados] = useState<Invitado[] | null>(null);
@@ -111,8 +188,9 @@ export function Progreso({
   totalRutas: number;
   onCerrar: () => void;
 }) {
-  const { propios, rutasPropias, grupo } = useMemo(() => {
+  const { propios, rutasPropias, hechosPorBanda, grupo } = useMemo(() => {
     const propios: Record<string, number> = { pico: 0, collado: 0, ibon: 0, refugio: 0 };
+    const hechosPorBanda = BANDAS_ALTITUD.map(() => 0);
     let rutasPropias = 0;
     const grupo = new Map<string, { nombre: string; total: number; picos: number }>();
     for (const r of realizados.values()) {
@@ -125,18 +203,60 @@ export function Progreso({
       if (r.categoria === "pico") datos.picos += 1;
       grupo.set(r.usuario, datos);
       if (usuario && r.usuario === usuario.uid) {
-        if (r.tipo === "ruta") rutasPropias += 1;
-        else propios[r.categoria] = (propios[r.categoria] ?? 0) + 1;
+        if (r.tipo === "ruta") {
+          rutasPropias += 1;
+        } else {
+          propios[r.categoria] = (propios[r.categoria] ?? 0) + 1;
+          if (r.categoria === "pico") {
+            const altitud = elementosPorId.get(r.refId)?.altitud;
+            const banda = altitud !== undefined && altitud !== null ? bandaDe(altitud) : -1;
+            if (banda !== -1) hechosPorBanda[banda] += 1;
+          }
+        }
       }
     }
     return {
       propios,
       rutasPropias,
+      hechosPorBanda,
       grupo: [...grupo.values()].sort(
         (a, b) => b.picos - a.picos || b.total - a.total,
       ),
     };
   }, [realizados, usuario]);
+
+  // Totales por banda de altitud: se recorre el catálogo una sola vez
+  const totalesPorBanda = useMemo(() => {
+    const totales = BANDAS_ALTITUD.map(() => 0);
+    for (const el of elementosPorId.values()) {
+      if (el.tipo !== "pico" || el.altitud === null) continue;
+      const banda = bandaDe(el.altitud);
+      if (banda !== -1) totales[banda] += 1;
+    }
+    return totales;
+  }, []);
+
+  // Actividad del grupo por mes, últimos doce
+  const meses = useMemo<CuboMensual[]>(() => {
+    const ahora = new Date();
+    const claves: string[] = [];
+    const cubos: CuboMensual[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(ahora.getFullYear(), ahora.getMonth() - i, 1);
+      claves.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+      cubos.push({ etiqueta: d.toLocaleDateString("es-ES", { month: "short" }), total: 0 });
+    }
+    const indice = new Map(claves.map((clave, i) => [clave, i]));
+    for (const r of realizados.values()) {
+      const i = indice.get(r.fecha.slice(0, 7));
+      if (i !== undefined) cubos[i].total += 1;
+    }
+    return cubos;
+  }, [realizados]);
+
+  const tresmilesPendientes =
+    totalesPorBanda[BANDAS_ALTITUD.length - 1] -
+    hechosPorBanda[BANDAS_ALTITUD.length - 1];
 
   return (
     <section
@@ -159,54 +279,97 @@ export function Progreso({
 
       <div className="space-y-4 p-4">
         {usuario ? (
-          <div>
-            <h3 className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
-              Lo mío
-            </h3>
-            <ul className="mt-2 space-y-2">
-              {FILAS_PERSONALES.map(({ categoria, etiqueta }) => {
-                const hechos = propios[categoria] ?? 0;
-                const total = TOTALES[categoria];
-                return (
-                  <li key={categoria}>
-                    <div className="flex items-baseline justify-between text-xs">
-                      <span className="text-hielo-200">{etiqueta}</span>
-                      <span className="text-roca-300">
-                        <span className="font-display text-sm text-nieve">
-                          {hechos}
-                        </span>{" "}
-                        de {total}
-                      </span>
-                    </div>
-                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-roca-800">
-                      <div
-                        className="h-full rounded-full"
-                        style={{
-                          width: `${Math.min(100, (hechos / total) * 100)}%`,
-                          backgroundColor:
-                            COLOR_TIPO[categoria as keyof typeof COLOR_TIPO],
-                        }}
-                      />
-                    </div>
-                  </li>
-                );
-              })}
-              <li className="flex items-baseline justify-between text-xs">
-                <span className="text-hielo-200">Rutas</span>
-                <span className="text-roca-300">
-                  <span className="font-display text-sm text-nieve">
-                    {rutasPropias}
-                  </span>{" "}
-                  de {totalRutas}
-                </span>
-              </li>
-            </ul>
-          </div>
+          <>
+            <div>
+              <h3 className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
+                Lo mío
+              </h3>
+              <ul className="mt-2 space-y-2">
+                {FILAS_PERSONALES.map(({ categoria, etiqueta }) => (
+                  <BarraProgreso
+                    key={categoria}
+                    etiqueta={etiqueta}
+                    hechos={propios[categoria] ?? 0}
+                    total={TOTALES[categoria]}
+                    color={COLOR_TIPO[categoria as keyof typeof COLOR_TIPO]}
+                  />
+                ))}
+                <BarraProgreso
+                  etiqueta="Rutas"
+                  hechos={rutasPropias}
+                  total={totalRutas}
+                  color="#3f92c9"
+                />
+              </ul>
+            </div>
+
+            <div className="border-t border-roca-800 pt-3">
+              <h3 className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
+                Picos por altitud
+              </h3>
+              <ul className="mt-2 space-y-2">
+                {BANDAS_ALTITUD.map((banda, i) => (
+                  <BarraProgreso
+                    key={banda.etiqueta}
+                    etiqueta={banda.etiqueta}
+                    hechos={hechosPorBanda[i]}
+                    total={totalesPorBanda[i]}
+                    color={COLOR_TIPO.pico}
+                  />
+                ))}
+              </ul>
+            </div>
+
+            <div className="border-t border-roca-800 pt-3">
+              <h3 className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
+                Pendientes
+              </h3>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                <Pendiente
+                  icono={<IconoPico width={16} height={16} />}
+                  numero={tresmilesPendientes}
+                  etiqueta="Tresmiles"
+                />
+                <Pendiente
+                  icono={<IconoCollado width={16} height={16} />}
+                  numero={TOTALES.collado - (propios.collado ?? 0)}
+                  etiqueta="Collados"
+                />
+                <Pendiente
+                  icono={<IconoIbon width={16} height={16} />}
+                  numero={TOTALES.ibon - (propios.ibon ?? 0)}
+                  etiqueta="Ibones"
+                />
+                <Pendiente
+                  icono={<IconoRefugio width={16} height={16} />}
+                  numero={TOTALES.refugio - (propios.refugio ?? 0)}
+                  etiqueta="Refugios"
+                />
+                <Pendiente
+                  icono={<IconoTrazar width={16} height={16} />}
+                  numero={totalRutas - rutasPropias}
+                  etiqueta="Rutas"
+                />
+              </div>
+            </div>
+          </>
         ) : (
           <p className="text-xs text-roca-300">
             Entra con tu cuenta para ver tu progreso.
           </p>
         )}
+
+        <div className="border-t border-roca-800 pt-3">
+          <h3 className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
+            Evolución del grupo
+          </h3>
+          <p className="mt-1 text-xs text-roca-300">
+            Actividades marcadas por mes, último año
+          </p>
+          <div className="mt-2">
+            <GraficoActividad meses={meses} />
+          </div>
+        </div>
 
         <div className="border-t border-roca-800 pt-3">
           <h3 className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
