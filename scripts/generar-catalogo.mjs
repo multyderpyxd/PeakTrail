@@ -5,27 +5,21 @@
  *   - collados y puertos de montaña con nombre (la cota es opcional)
  *   - ibones y estanys con nombre (fuera embalses y pantanos)
  *   - refugios de montaña
- * consultando Overpass (OpenStreetMap) y aplicando después los ajustes
- * manuales de data/curados.json.
+ * consultando Overpass (OpenStreetMap), refinando la cota con el MDT05
+ * del IGN (malla de 5 m, más fiel que la etiqueta `ele` de OSM) y
+ * aplicando después los ajustes manuales de data/curados.json.
  *
  * Uso: npm run catalogo:generar
  */
 
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-
-const SERVIDORES = [
-  "https://overpass-api.de/api/interpreter",
-  "https://overpass.kumi.systems/api/interpreter",
-];
-
-// Comunidades por código ISO (más estable que el nombre) y latitud mínima
-// que deja fuera el llano: la zona pirenaica y prepirenaica de cada una.
-const ZONAS = [
-  { nombre: "Aragón", iso: "ES-AR", latMinima: 42.3 },
-  { nombre: "Navarra", iso: "ES-NC", latMinima: 42.6 },
-  { nombre: "Cataluña", iso: "ES-CT", latMinima: 42.1 },
-];
+import {
+  altitudPicoMDT05,
+  elevacionMDT05,
+  estadisticasCacheMDT05,
+} from "./mdt05.mjs";
+import { consultarOverpass, ZONAS_PIRINEO } from "./overpass.mjs";
 
 // Lagos de montaña: ibón (Aragón), estany (Cataluña), estanh (Val d'Aran)
 const REGEX_LAGO = "(^|[ '‘])([Ii]b[oó]n|[Ee]stanys?|[Ee]stanh)";
@@ -69,38 +63,10 @@ function clasificar(tags) {
   return null;
 }
 
-async function consultarOverpass(consulta, etiqueta) {
-  let ultimoError;
-  for (const servidor of SERVIDORES) {
-    for (let intento = 1; intento <= 2; intento++) {
-      try {
-        const respuesta = await fetch(servidor, {
-          method: "POST",
-          headers: {
-            // Overpass rechaza con 406 los user-agents genéricos de librería
-            "User-Agent": "PeakTrail/0.1 (app personal de montanismo; Node.js)",
-            Accept: "application/json",
-          },
-          body: new URLSearchParams({ data: consulta }),
-        });
-        if (!respuesta.ok) {
-          throw new Error(`${servidor} devolvió ${respuesta.status}`);
-        }
-        return (await respuesta.json()).elements;
-      } catch (error) {
-        ultimoError = error;
-        console.warn(`  ${etiqueta}: fallo (${error.message}), reintentando...`);
-        await new Promise((r) => setTimeout(r, 15_000));
-      }
-    }
-  }
-  throw ultimoError;
-}
-
 const porId = new Map();
 let procesados = 0;
 
-for (const zona of ZONAS) {
+for (const zona of ZONAS_PIRINEO) {
   console.log(`Consultando Overpass: ${zona.nombre} (puede tardar unos minutos)...`);
   const elements = await consultarOverpass(consultaZona(zona.iso), zona.nombre);
   let admitidos = 0;
@@ -144,15 +110,34 @@ for (const zona of ZONAS) {
       else if (existente.altitud !== null || alt === null) continue;
     }
 
+    // Cota del MDT05 (5 m, LiDAR): más fiel que la etiqueta `ele` de OSM,
+    // que puede estar desactualizada o mal situada. En los picos se toma
+    // el máximo en una ventana pequeña porque el nodo de OSM rara vez cae
+    // en el mismo píxel exacto que la cumbre. Si el WCS falla, se cae a
+    // la etiqueta de OSM en vez de abortar toda la generación.
+    const coordenadas = { lng: +lng.toFixed(6), lat: +lat.toFixed(6) };
+    let altitudMdt = null;
+    try {
+      altitudMdt =
+        tipo === "pico"
+          ? await altitudPicoMDT05([coordenadas.lng, coordenadas.lat])
+          : await elevacionMDT05([coordenadas.lng, coordenadas.lat]);
+    } catch (error) {
+      console.warn(`  Aviso: MDT05 falló para ${nombre} (${error.message}), uso la cota de OSM`);
+    }
+
     porId.set(id, {
       id,
       tipo,
       nombre,
-      altitud: alt,
-      coordenadas: { lng: +lng.toFixed(6), lat: +lat.toFixed(6) },
+      altitud: altitudMdt ?? alt,
+      coordenadas,
       fuente: { origen: "osm", osmTipo: el.type, osmId: el.id },
     });
     admitidos += 1;
+    if (admitidos % 500 === 0) {
+      console.log(`  ${zona.nombre}: ${admitidos} elementos con cota MDT05...`);
+    }
   }
   console.log(`  ${zona.nombre}: ${admitidos} elementos admitidos`);
 }
@@ -187,3 +172,4 @@ const catalogo = {
 await writeFile("public/catalogo.json", JSON.stringify(catalogo) + "\n");
 console.log("Catálogo escrito en public/catalogo.json");
 console.log("Totales:", totales, "->", elementos.length, "elementos");
+console.log("Caché MDT05:", estadisticasCacheMDT05());

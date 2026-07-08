@@ -1,12 +1,15 @@
 /**
  * Genera public/rutas.json con las rutas de senderismo (GR/PR/SL) del
- * Pirineo aragonés a partir de las relaciones route=hiking de OpenStreetMap
- * dentro de la provincia de Huesca:
+ * Pirineo peninsular a partir de las relaciones route=hiking de
+ * OpenStreetMap dentro de Aragón, Navarra y Cataluña:
  *
- *   1. Descarga las relaciones con geometría por lotes (una petición por red).
+ *   1. Descarga las relaciones con geometría por zona (una petición por
+ *      comunidad; la misma relación puede salir de varias si cruza el
+ *      límite administrativo, de ahí la deduplicación por id).
  *   2. Cose los tramos (ways) de cada relación en líneas continuas.
- *   3. Muestrea la elevación cada 50 m sobre teselas terrarium (Mapzen/AWS),
- *      la misma fuente que usa el terreno 3D del mapa.
+ *   3. Muestrea la elevación cada 50 m con el MDT05 del IGN (malla de 5 m,
+ *      LiDAR), más fiel que las teselas terrarium que usa el terreno 3D
+ *      del mapa (pensadas para el relieve visual, no para métricas).
  *   4. Calcula distancia, desniveles (con histéresis de 5 m), altitudes
  *      mínima/máxima y un perfil de elevación compacto.
  *   5. Simplifica la geometría (Douglas-Peucker) para pintarla en el mapa.
@@ -14,28 +17,24 @@
  * Uso: npm run rutas:generar
  */
 
-import { writeFile, mkdir } from "node:fs/promises";
-import { PNG } from "pngjs";
+import { readFile, writeFile, mkdir, rm } from "node:fs/promises";
+import { consultarOverpass, ZONAS_PIRINEO } from "./overpass.mjs";
+import { elevacionMDT05, estadisticasCacheMDT05 } from "./mdt05.mjs";
+import { elevacionTerrarium } from "./terrarium.mjs";
 
-const OVERPASS = "https://overpass-api.de/api/interpreter";
-const CABECERAS = {
-  "User-Agent": "PeakTrail/0.1 (app personal de montanismo; Node.js)",
-  Accept: "application/json",
-};
-
-// Una petición por red para no agotar el tiempo de Overpass
-const REDES = [
-  ["nwn", "iwn"], // GR de red nacional e internacional (GR-11, HRP...)
-  ["rwn"], // PR
-  ["lwn"], // SL y senderos locales
-];
+// Punto de control: el entorno de desarrollo puede reiniciarse a mitad de
+// una generación larga (cientos de rutas, miles de puntos muestreados). Se
+// guarda el progreso aquí para poder reanudar sin repetir el trabajo ya
+// hecho; se borra al terminar con éxito.
+const CHECKPOINT = ".cache/rutas-parciales.json";
 
 const PASO_MUESTREO_M = 50;
-// Fracción mínima del trazado en la mitad pirenaica (lat >= 42.3): deja fuera
-// caminos de larga distancia de tierra baja que solo rozan la provincia
-const LATITUD_PIRINEO = 42.3;
+// Fracción mínima del trazado en la mitad pirenaica: deja fuera caminos de
+// larga distancia de tierra baja que solo rozan la zona. Se usa el corte
+// más permisivo de las tres comunidades (Cataluña) porque el propio recorte
+// geográfico ya lo hace cada consulta por zona.
+const LATITUD_PIRINEO = Math.min(...ZONAS_PIRINEO.map((z) => z.latMinima));
 const FRACCION_MINIMA_PIRINEO = 0.6;
-const ZOOM_DEM = 12;
 const TOLERANCIA_SIMPLIFICACION = 0.00025; // ~25 m
 const MAX_PUNTOS_PERFIL = 220;
 const UMBRAL_DESNIVEL_M = 5;
@@ -116,35 +115,6 @@ function coserTramos(tramos) {
   return partes.sort((a, b) => b.length - a.length);
 }
 
-// ---------- elevación (teselas terrarium) ----------
-
-const cacheTeselas = new Map();
-
-async function tesela(z, x, y) {
-  const clave = `${z}/${x}/${y}`;
-  if (!cacheTeselas.has(clave)) {
-    const url = `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
-    const r = await fetch(url, { headers: CABECERAS });
-    if (!r.ok) throw new Error(`Tesela DEM ${clave}: ${r.status}`);
-    const png = PNG.sync.read(Buffer.from(await r.arrayBuffer()));
-    cacheTeselas.set(clave, png);
-  }
-  return cacheTeselas.get(clave);
-}
-
-async function elevacion([lng, lat]) {
-  const n = 2 ** ZOOM_DEM;
-  const xf = ((lng + 180) / 360) * n;
-  const rad = (lat * Math.PI) / 180;
-  const yf = ((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * n;
-  const png = await tesela(ZOOM_DEM, Math.floor(xf), Math.floor(yf));
-  const px = Math.min(255, Math.floor((xf % 1) * 256));
-  const py = Math.min(255, Math.floor((yf % 1) * 256));
-  const i = (py * 256 + px) * 4;
-  const [r, g, b] = [png.data[i], png.data[i + 1], png.data[i + 2]];
-  return r * 256 + g + b / 256 - 32768;
-}
-
 /** Remuestrea una línea a puntos equidistantes (~paso metros). */
 function remuestrear(linea, paso) {
   const puntos = [linea[0]];
@@ -181,108 +151,187 @@ function redDeRuta(tags) {
 
 // ---------- proceso principal ----------
 
-const relaciones = [];
-for (const redes of REDES) {
-  const filtroRed = redes.map((r) => `"${r}"`).join("|") &&
-    `["network"~"^(${redes.join("|")})$"]`;
-  const consulta = `
-[out:json][timeout:300];
-area["boundary"="administrative"]["admin_level"="6"]["name"="Huesca"]->.hu;
-relation["route"="hiking"]${filtroRed}(area.hu);
-out geom;
-`;
-  console.log(`Descargando red ${redes.join("+")} de Overpass...`);
-  const r = await fetch(OVERPASS, {
-    method: "POST",
-    headers: CABECERAS,
-    body: new URLSearchParams({ data: consulta }),
-  });
-  if (!r.ok) throw new Error(`Overpass devolvió ${r.status}`);
-  const { elements } = await r.json();
-  relaciones.push(...elements);
-  console.log(`  ${elements.length} relaciones`);
+const CACHE_RELACIONES = ".cache/rutas-relaciones.json";
+
+// Zonas grandes (Cataluña) hacen que la consulta completa supere el tiempo
+// de espera de Overpass; se trocea por red igual que antes de ampliar a
+// las tres comunidades, y cada trozo se guarda en cuanto llega para no
+// repetir los que ya hayan tenido éxito si el proceso se corta.
+const GRUPOS_RED = [
+  ["nwn", "iwn"], // GR de red nacional e internacional (GR-11, HRP...)
+  ["rwn"], // PR
+  ["lwn"], // SL y senderos locales
+];
+
+const relacionesPorId = new Map();
+const trozosHechos = new Set();
+const cacheRelaciones = await readFile(CACHE_RELACIONES, "utf8").catch(() => null);
+if (cacheRelaciones) {
+  const datos = JSON.parse(cacheRelaciones);
+  for (const rel of datos.relaciones) relacionesPorId.set(rel.id, rel);
+  for (const t of datos.trozosHechos) trozosHechos.add(t);
+  console.log(
+    `Relaciones de Overpass recuperadas de caché: ${relacionesPorId.size} (${trozosHechos.size} trozos ya hechos)`,
+  );
 }
 
-const rutas = [];
-for (const rel of relaciones) {
-  const tags = rel.tags ?? {};
-  // los contenedores (super-relaciones) se saltan: sus etapas ya vienen sueltas
-  const contieneRelaciones = (rel.members ?? []).some((m) => m.type === "relation");
-  const tramos = (rel.members ?? [])
-    .filter(
-      (m) =>
-        m.type === "way" &&
-        m.geometry &&
-        !["alternative", "excursion", "approach", "connection"].includes(m.role),
-    )
-    .map((m) => m.geometry.map((p) => [p.lon, p.lat]));
-  if (contieneRelaciones || !tramos.length) continue;
-  if (!tags.name && !tags.ref) continue;
+async function guardarCacheRelaciones() {
+  await mkdir(".cache", { recursive: true });
+  await writeFile(
+    CACHE_RELACIONES,
+    JSON.stringify({
+      relaciones: [...relacionesPorId.values()],
+      trozosHechos: [...trozosHechos],
+    }),
+  );
+}
 
-  const partes = coserTramos(tramos);
+for (const zona of ZONAS_PIRINEO) {
+  for (const redes of GRUPOS_RED) {
+    const clave = `${zona.iso}:${redes.join("+")}`;
+    if (trozosHechos.has(clave)) continue;
 
-  // muestreo de elevación sobre las partes concatenadas
-  const muestras = [];
-  const muestrasLat = [];
-  let distancia = 0;
-  for (const parte of partes) {
-    const puntos = remuestrear(parte, PASO_MUESTREO_M);
-    for (let i = 0; i < puntos.length; i++) {
-      if (i > 0) distancia += haversine(puntos[i - 1], puntos[i]);
-      muestras.push({ d: distancia, ele: await elevacion(puntos[i]) });
-      muestrasLat.push(puntos[i][1]);
-    }
+    const consulta = `
+[out:json][timeout:300];
+area["ISO3166-2"="${zona.iso}"]["admin_level"="4"]->.zona;
+relation["route"="hiking"]["network"~"^(${redes.join("|")})$"](area.zona);
+out geom;
+`;
+    console.log(`Descargando rutas de Overpass: ${zona.nombre} (${redes.join("+")})...`);
+    const elements = await consultarOverpass(consulta, `${zona.nombre} ${redes.join("+")}`);
+    for (const rel of elements) relacionesPorId.set(rel.id, rel);
+    trozosHechos.add(clave);
+    console.log(`  ${elements.length} relaciones`);
+    await guardarCacheRelaciones();
   }
-  if (muestras.length < 2) continue;
+}
+const relaciones = [...relacionesPorId.values()];
 
-  const enPirineo =
-    muestrasLat.filter((lat) => lat >= LATITUD_PIRINEO).length / muestrasLat.length;
-  if (enPirineo < FRACCION_MINIMA_PIRINEO) continue;
+// Retoma un punto de control si lo hay: relaciones ya evaluadas en una
+// ejecución anterior (tanto las que dieron ruta como las descartadas) se
+// saltan sin volver a muestrear su elevación.
+let rutas = [];
+const vistas = new Set();
+const checkpoint = await readFile(CHECKPOINT, "utf8").catch(() => null);
+if (checkpoint) {
+  const datos = JSON.parse(checkpoint);
+  rutas = datos.rutas;
+  for (const id of datos.vistas) vistas.add(id);
+  console.log(
+    `Retomando punto de control: ${rutas.length} rutas y ${vistas.size} relaciones ya evaluadas`,
+  );
+}
 
-  // suavizado (media móvil de 3) y desniveles con histéresis
-  const suave = muestras.map((m, i) => ({
-    d: m.d,
-    ele:
-      (muestras[Math.max(0, i - 1)].ele + m.ele + muestras[Math.min(muestras.length - 1, i + 1)].ele) / 3,
-  }));
-  let [pos, neg] = [0, 0];
-  let referencia = suave[0].ele;
-  for (const m of suave) {
-    const delta = m.ele - referencia;
-    if (delta >= UMBRAL_DESNIVEL_M) {
-      pos += delta;
-      referencia = m.ele;
-    } else if (delta <= -UMBRAL_DESNIVEL_M) {
-      neg -= delta;
-      referencia = m.ele;
-    }
-  }
+async function guardarCheckpoint() {
+  await mkdir(".cache", { recursive: true });
+  await writeFile(CHECKPOINT, JSON.stringify({ rutas, vistas: [...vistas] }));
+}
 
-  const salto = Math.max(1, Math.ceil(suave.length / MAX_PUNTOS_PERFIL));
-  const perfil = suave
-    .filter((_, i) => i % salto === 0 || i === suave.length - 1)
-    .map((m) => [+(m.d / 1000).toFixed(2), Math.round(m.ele)]);
-
-  rutas.push({
-    id: `osm-${rel.id}`,
-    ref: tags.ref ?? null,
-    nombre: tags.name ?? tags.ref,
-    red: redDeRuta(tags),
-    distanciaKm: +(distancia / 1000).toFixed(1),
-    desnivelPos: Math.round(pos),
-    desnivelNeg: Math.round(neg),
-    altMin: Math.round(Math.min(...suave.map((m) => m.ele))),
-    altMax: Math.round(Math.max(...suave.map((m) => m.ele))),
-    perfil,
-    partes: partes.map((p) =>
-      douglasPeucker(p, TOLERANCIA_SIMPLIFICACION).map(([lng, lat]) => [
-        +lng.toFixed(5),
-        +lat.toFixed(5),
-      ]),
-    ),
-    fuente: { origen: "osm", osmTipo: "relation", osmId: rel.id },
+// El entorno puede reiniciarse con un SIGTERM (no un fallo del proceso):
+// guardar el progreso antes de que se corte de verdad.
+let guardando = null;
+for (const senal of ["SIGTERM", "SIGINT"]) {
+  process.on(senal, () => {
+    if (guardando) return;
+    console.warn(`\n${senal} recibida: guardando punto de control antes de salir...`);
+    guardando = guardarCheckpoint().finally(() => process.exit(0));
   });
-  if (rutas.length % 25 === 0) console.log(`  procesadas ${rutas.length} rutas...`);
+}
+
+let contador = 0;
+for (const rel of relaciones) {
+  if (vistas.has(rel.id)) continue;
+  vistas.add(rel.id);
+  contador += 1;
+  if (contador % 20 === 0) await guardarCheckpoint();
+  try {
+    const tags = rel.tags ?? {};
+    // los contenedores (super-relaciones) se saltan: sus etapas ya vienen sueltas
+    const contieneRelaciones = (rel.members ?? []).some((m) => m.type === "relation");
+    const tramos = (rel.members ?? [])
+      .filter(
+        (m) =>
+          m.type === "way" &&
+          m.geometry &&
+          !["alternative", "excursion", "approach", "connection"].includes(m.role),
+      )
+      .map((m) => m.geometry.map((p) => [p.lon, p.lat]));
+    if (contieneRelaciones || !tramos.length) continue;
+    if (!tags.name && !tags.ref) continue;
+
+    const partes = coserTramos(tramos);
+
+    // muestreo de elevación sobre las partes concatenadas
+    const muestras = [];
+    const muestrasLat = [];
+    let distancia = 0;
+    for (const parte of partes) {
+      const puntos = remuestrear(parte, PASO_MUESTREO_M);
+      for (let i = 0; i < puntos.length; i++) {
+        if (i > 0) distancia += haversine(puntos[i - 1], puntos[i]);
+        // Fuera de España (rutas transfronterizas como el HRP o el GR-10)
+        // el MDT05 no tiene dato: se recurre a terrarium para ese punto
+        const ele =
+          (await elevacionMDT05(puntos[i])) ?? (await elevacionTerrarium(puntos[i]));
+        muestras.push({ d: distancia, ele });
+        muestrasLat.push(puntos[i][1]);
+      }
+    }
+    if (muestras.length < 2) continue;
+
+    const enPirineo =
+      muestrasLat.filter((lat) => lat >= LATITUD_PIRINEO).length / muestrasLat.length;
+    if (enPirineo < FRACCION_MINIMA_PIRINEO) continue;
+
+    // suavizado (media móvil de 3) y desniveles con histéresis
+    const suave = muestras.map((m, i) => ({
+      d: m.d,
+      ele:
+        (muestras[Math.max(0, i - 1)].ele + m.ele + muestras[Math.min(muestras.length - 1, i + 1)].ele) / 3,
+    }));
+    let [pos, neg] = [0, 0];
+    let referencia = suave[0].ele;
+    for (const m of suave) {
+      const delta = m.ele - referencia;
+      if (delta >= UMBRAL_DESNIVEL_M) {
+        pos += delta;
+        referencia = m.ele;
+      } else if (delta <= -UMBRAL_DESNIVEL_M) {
+        neg -= delta;
+        referencia = m.ele;
+      }
+    }
+
+    const salto = Math.max(1, Math.ceil(suave.length / MAX_PUNTOS_PERFIL));
+    const perfil = suave
+      .filter((_, i) => i % salto === 0 || i === suave.length - 1)
+      .map((m) => [+(m.d / 1000).toFixed(2), Math.round(m.ele)]);
+
+    rutas.push({
+      id: `osm-${rel.id}`,
+      ref: tags.ref ?? null,
+      nombre: tags.name ?? tags.ref,
+      red: redDeRuta(tags),
+      distanciaKm: +(distancia / 1000).toFixed(1),
+      desnivelPos: Math.round(pos),
+      desnivelNeg: Math.round(neg),
+      altMin: Math.round(Math.min(...suave.map((m) => m.ele))),
+      altMax: Math.round(Math.max(...suave.map((m) => m.ele))),
+      perfil,
+      partes: partes.map((p) =>
+        douglasPeucker(p, TOLERANCIA_SIMPLIFICACION).map(([lng, lat]) => [
+          +lng.toFixed(5),
+          +lat.toFixed(5),
+        ]),
+      ),
+      fuente: { origen: "osm", osmTipo: "relation", osmId: rel.id },
+    });
+    if (rutas.length % 25 === 0) {
+      console.log(`  procesadas ${rutas.length} rutas... (${estadisticasCacheMDT05().celdasEnMemoria} celdas MDT05 en caché)`);
+    }
+  } catch (error) {
+    console.warn(`  Aviso: ruta ${rel.tags?.name ?? rel.id} falló (${error.message}), se descarta`);
+  }
 }
 
 rutas.sort((a, b) => (a.ref ?? a.nombre).localeCompare(b.ref ?? b.nombre, "es"));
@@ -295,4 +344,10 @@ await writeFile(
 const porRed = {};
 for (const r of rutas) porRed[r.red] = (porRed[r.red] ?? 0) + 1;
 console.log(`Escritas ${rutas.length} rutas en public/rutas.json`, porRed);
-console.log(`Teselas DEM descargadas: ${cacheTeselas.size}`);
+console.log("Caché MDT05:", estadisticasCacheMDT05());
+
+// Generación completa: los puntos de control ya no hacen falta
+await Promise.all([
+  rm(CHECKPOINT, { force: true }),
+  rm(CACHE_RELACIONES, { force: true }),
+]);

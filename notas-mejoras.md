@@ -53,6 +53,16 @@ correcta; esto es margen de mejora.
 - **Comentarios/fotos en vivo**: se cargan al abrir la ficha (getDocs);
   con onSnapshot se verían llegar sin reabrir.
 
+## Rutas (Hito 13)
+
+- **Rutas de largo recorrido ajenas al Pirineo**: el filtro «fracción del
+  trazado en la mitad pirenaica» usa un único corte de latitud (el más
+  permisivo de las tres comunidades) y admite algunas rutas de paso por la
+  zona pero centradas en otra región (Camino de Santiago, Camino de las
+  Asturias, GR-99 del Ebro, Camí de l'Últim Càtar...). Datos correctos, pero
+  no encajan en «rutas del Pirineo». Afinar con un corte de latitud por
+  longitud (banda que sigue la cresta) o un tope de distancia total.
+
 ## Catálogo (fase 2)
 
 - **Sitios de interés adicionales**: miradores (`tourism=viewpoint`),

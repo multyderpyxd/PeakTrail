@@ -24,6 +24,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# caché local de teselas MDT05 del IGN (scripts/mdt05.mjs)
+/.cache
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
