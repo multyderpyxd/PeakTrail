@@ -4,22 +4,38 @@
  * la API de Wikidata resuelve el identificador (QID) al artículo de
  * Wikipedia en el idioma disponible más cercano, y la API REST de esa
  * Wikipedia da el extracto y la imagen de portada (CORS abierto en ambas).
+ *
+ * Si el artículo encontrado no está en castellano, el extracto se traduce
+ * con MyMemory (gratuita, sin clave, CORS abierto) para que toda la app se
+ * lea en español; el idioma de origen se conserva en el resultado para
+ * mostrar una nota de transparencia ("traducción automática del catalán…")
+ * junto al enlace al artículo real. Si la traducción falla, se muestra el
+ * extracto original antes que no mostrar nada.
+ *
  * Resultado cacheado en memoria por QID.
  */
 
 const WIKIDATA_API = "https://www.wikidata.org/w/api.php";
+const MYMEMORY_API = "https://api.mymemory.translated.net/get";
 
 // Preferencia de idioma: castellano primero, luego las cooficiales del
 // Pirineo peninsular (catalán, aranés/occitano, euskera), francés (vertiente
 // norte) y por último inglés, antes de rendirse.
 const IDIOMAS_PREFERIDOS = ["es", "ca", "oc", "eu", "fr", "en"] as const;
 
+// MyMemory rechaza consultas de más de 500 caracteres (403, "QUERY LENGTH
+// LIMIT EXCEEDED"); se deja margen para no rozar el límite exacto.
+const MAX_CARACTERES_TRADUCCION = 480;
+
 export interface ResumenWiki {
   titulo: string;
   extracto: string;
   imagenUrl: string | null;
   urlPagina: string;
+  /** Idioma del artículo de Wikipedia encontrado (antes de traducir). */
   idioma: string;
+  /** true si `extracto` es una traducción automática (idioma !== "es"). */
+  traducido: boolean;
 }
 
 const cache = new Map<string, Promise<ResumenWiki | null>>();
@@ -91,13 +107,69 @@ async function resumenDePagina(
   // Páginas de desambiguación o sin extracto real no aportan nada útil
   if (!datos.extract || datos.type === "disambiguation") return null;
 
+  const extracto =
+    idioma === "es" ? datos.extract : await traducir(datos.extract, idioma);
+
   return {
     titulo: datos.title,
-    extracto: datos.extract,
+    extracto,
     imagenUrl: datos.thumbnail?.source ?? null,
     urlPagina:
       datos.content_urls?.desktop?.page ??
       `https://${idioma}.wikipedia.org/wiki/${encodeURIComponent(titulo)}`,
     idioma,
+    traducido: idioma !== "es" && extracto !== datos.extract,
   };
+}
+
+/** Divide en fragmentos por frase, cada uno dentro del límite de MyMemory. */
+function trocearParaTraducir(texto: string, max: number): string[] {
+  const oraciones = texto.match(/[^.!?]+[.!?]*\s*/g) ?? [texto];
+  const trozos: string[] = [];
+  let actual = "";
+  for (const oracion of oraciones) {
+    if (actual && (actual + oracion).length > max) {
+      trozos.push(actual.trim());
+      actual = oracion;
+    } else {
+      actual += oracion;
+    }
+  }
+  if (actual.trim()) trozos.push(actual.trim());
+  return trozos;
+}
+
+async function traducirTrozo(
+  texto: string,
+  origen: string,
+): Promise<string | null> {
+  const url = new URL(MYMEMORY_API);
+  url.searchParams.set("q", texto);
+  url.searchParams.set("langpair", `${origen}|es`);
+  const respuesta = await fetch(url.toString());
+  if (!respuesta.ok) return null;
+  const datos = await respuesta.json();
+  if (datos.responseStatus !== 200 || !datos.responseData?.translatedText) {
+    return null;
+  }
+  return datos.responseData.translatedText;
+}
+
+/**
+ * Traduce el extracto al castellano trozo a trozo (MyMemory limita cada
+ * consulta a 500 caracteres). Si cualquier trozo falla, se descarta la
+ * traducción entera y se devuelve el texto original: un resumen a medio
+ * traducir, mezclando idiomas, sería peor que dejarlo en el original.
+ */
+async function traducir(texto: string, origen: string): Promise<string> {
+  try {
+    const trozos = trocearParaTraducir(texto, MAX_CARACTERES_TRADUCCION);
+    const traducidos = await Promise.all(
+      trozos.map((t) => traducirTrozo(t, origen)),
+    );
+    if (traducidos.some((t) => t === null)) return texto;
+    return traducidos.join(" ");
+  } catch {
+    return texto;
+  }
 }

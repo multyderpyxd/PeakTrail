@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react";
 import { resumenWikidata, type ResumenWiki } from "@/lib/wikipedia";
 
+const ETIQUETA_IDIOMA: Record<string, string> = {
+  ca: "catalán",
+  oc: "occitano",
+  eu: "euskera",
+  fr: "francés",
+  en: "inglés",
+};
+
 /**
  * Descripción y foto libre de Wikipedia para los elementos con etiqueta
  * `wikidata` en OSM (Hito 20). Si no hay artículo aprovechable (o el
@@ -51,14 +59,22 @@ export function SeccionWikipedia({ wikidata }: { wikidata?: string }) {
       <p className="text-sm leading-relaxed text-hielo-200">
         {resumen.extracto}
       </p>
-      <a
-        href={resumen.urlPagina}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-block text-xs text-hielo-300 underline decoration-roca-500 underline-offset-2 hover:text-nieve"
-      >
-        Leer en Wikipedia
-      </a>
+      <p className="text-xs text-roca-300">
+        {resumen.traducido && (
+          <>Traducción automática del {ETIQUETA_IDIOMA[resumen.idioma]} · </>
+        )}
+        {!resumen.traducido && resumen.idioma !== "es" && (
+          <>En {ETIQUETA_IDIOMA[resumen.idioma]} (no se pudo traducir) · </>
+        )}
+        <a
+          href={resumen.urlPagina}
+          target="_blank"
+          rel="noreferrer"
+          className="text-hielo-300 underline decoration-roca-500 underline-offset-2 hover:text-nieve"
+        >
+          Leer en Wikipedia
+        </a>
+      </p>
     </div>
   );
 }

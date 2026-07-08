@@ -127,6 +127,20 @@ correcta; esto es margen de mejora.
   cachear la URL (no la imagen) en el catálogo para ahorrar la ida y vuelta
   a Wikidata, a costa de que quede desactualizada hasta la próxima
   regeneración.
+- **Calidad de la traducción del occitano**: MyMemory da resultados
+  incoherentes con el par occitano-castellano (probado con un texto real
+  sobre un pico: tradujo «som» —cima— sin reconocerlo y la frase perdió el
+  sentido). Se traduce igual porque algo es mejor que nada y la nota de
+  transparencia + enlace al original avisan del caso, pero si molesta se
+  podría: (a) dejar el occitano sin traducir mostrando el original con la
+  nota «en occitano», o (b) probar otro motor solo para ese par de idiomas
+  si aparece uno mejor. El volumen de picos que caen en occitano-sin-otro-
+  idioma es pequeño (es el penúltimo idioma de seis en la preferencia).
+- **Cuota de MyMemory**: uso anónimo, sin clave ni email de contacto (para no
+  dejarlo en el repo público). Si con el grupo se agota la cuota diaria
+  compartida por IP, se podría añadir un email de contacto por variable de
+  entorno (`.env.local`, no commiteado) para subir el límite, igual que
+  Strava con sus claves.
 
 ## Catálogo (fase 2)
 
