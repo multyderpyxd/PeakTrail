@@ -109,6 +109,25 @@ correcta; esto es margen de mejora.
   que cruzan cotas muy distintas, una previsión por tramos o por franjas
   horarias del día de salida daría más información.
 
+## Fichas enriquecidas (Hito 20)
+
+- **Wikipedia sin Wikidata**: si un elemento trae `wikipedia` en OSM pero no
+  `wikidata` (solo 1 de ~3000 picos en Aragón en la muestra), hoy no se
+  resuelve y la ficha se queda sin descripción. Se podría resolver en la
+  generación (una consulta extra a la API de Wikipedia para sacar el QID),
+  pero no compensaba el coste para un caso tan raro; revisar si el porcentaje
+  sube al ampliar a collados/refugios.
+  - **Cobertura por tipo**: hoy ~27 % de los elementos traen `wikidata`
+  (picos 2.155, ibones 248, collados 223, refugios 53). Los picos «menores»
+  sin artículo se quedan sin ficha enriquecida — es una limitación de qué
+  etiqueta el propio OSM, no del código; iría mejorando sola con el tiempo
+  a medida que la comunidad de OSM/Wikidata añada más enlaces.
+- **Caché de imágenes**: las fotos de Wikipedia se cargan directo desde
+  `upload.wikimedia.org` en cada apertura de ficha; si pesa, se podría
+  cachear la URL (no la imagen) en el catálogo para ahorrar la ida y vuelta
+  a Wikidata, a costa de que quede desactualizada hasta la próxima
+  regeneración.
+
 ## Catálogo (fase 2)
 
 - **Sitios de interés adicionales**: miradores (`tourism=viewpoint`),

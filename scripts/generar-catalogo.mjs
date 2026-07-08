@@ -133,6 +133,11 @@ for (const zona of ZONAS_PIRINEO) {
       altitud: altitudMdt ?? alt,
       coordenadas,
       comunidad: zona.clave,
+      // El identificador Wikidata de OSM (si lo tiene) alimenta la ficha con
+      // la descripción y foto libre de Wikipedia (Hito 20); no se resuelve
+      // aquí el caso wikipedia-sin-wikidata (solo 1 de ~3000 picos en Aragón:
+      // no compensa la ida y vuelta extra a la API por generación).
+      ...(el.tags.wikidata ? { wikidata: el.tags.wikidata } : {}),
       fuente: { origen: "osm", osmTipo: el.type, osmId: el.id },
     });
     admitidos += 1;

@@ -33,6 +33,8 @@ export interface ElementoGeografico {
   comunidad?: Comunidad;
   descripcion?: string;
   fotos?: string[];
+  /** Identificador Wikidata (ej. "Q5790190"), si OSM lo etiqueta; alimenta la ficha con Wikipedia. */
+  wikidata?: string;
   fuente: FuenteDatos;
 }
 

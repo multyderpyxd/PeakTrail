@@ -6,6 +6,7 @@ import { COLOR_TIPO } from "./marcadores";
 import { MarcarRealizado } from "./MarcarRealizado";
 import { Meteo } from "./Meteo";
 import { SeccionSocial } from "./SeccionSocial";
+import { SeccionWikipedia } from "./SeccionWikipedia";
 import {
   IconoCerrar,
   IconoCollado,
@@ -108,6 +109,7 @@ export function FichaElemento({
             {elemento.descripcion}
           </p>
         )}
+        <SeccionWikipedia wikidata={elemento.wikidata} />
         <p className="text-xs text-roca-300">
           {coordenadaLegible(lat, ["N", "S"])} · {coordenadaLegible(lng, ["E", "O"])}
           {enlaceOsm && (
