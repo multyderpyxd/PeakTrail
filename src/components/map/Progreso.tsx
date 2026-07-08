@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
+import type { Comunidad } from "@/types/catalogo";
 import type { Realizado } from "@/lib/realizados";
 import { expulsar, invitar, listarInvitados, type Invitado } from "@/lib/invitados";
 import type { Ruta } from "@/types/rutas";
@@ -25,6 +26,16 @@ const BANDAS_ALTITUD = [
   { min: 2500, max: 3000, etiqueta: "2.500–2.999 m" },
   { min: 3000, max: Infinity, etiqueta: "≥ 3.000 m" },
 ] as const;
+
+/**
+ * Reparto por comunidad autónoma; el desglose más fino por comarcas queda
+ * apuntado en notas-mejoras.md como mejora sustancial pendiente.
+ */
+const COMUNIDADES: { clave: Comunidad; etiqueta: string }[] = [
+  { clave: "aragon", etiqueta: "Aragón" },
+  { clave: "navarra", etiqueta: "Navarra" },
+  { clave: "cataluna", etiqueta: "Cataluña" },
+];
 
 function bandaDe(altitud: number): number {
   return BANDAS_ALTITUD.findIndex((b) => altitud >= b.min && altitud < b.max);
@@ -258,6 +269,30 @@ export function Progreso({
     totalesPorBanda[BANDAS_ALTITUD.length - 1] -
     hechosPorBanda[BANDAS_ALTITUD.length - 1];
 
+  // Elementos y rutas de cada comunidad, y cuántos lleva hechos el usuario
+  const { totalesPorComunidad, hechosPorComunidad } = useMemo(() => {
+    const totales: Record<Comunidad, number> = { aragon: 0, navarra: 0, cataluna: 0 };
+    for (const el of elementosPorId.values()) {
+      if (el.comunidad) totales[el.comunidad] += 1;
+    }
+    for (const ruta of rutas?.values() ?? []) {
+      if (ruta.comunidad) totales[ruta.comunidad] += 1;
+    }
+
+    const hechos: Record<Comunidad, number> = { aragon: 0, navarra: 0, cataluna: 0 };
+    if (usuario) {
+      for (const r of realizados.values()) {
+        if (r.usuario !== usuario.uid) continue;
+        const comunidad =
+          r.tipo === "elemento"
+            ? elementosPorId.get(r.refId)?.comunidad
+            : rutas?.get(r.refId)?.comunidad;
+        if (comunidad) hechos[comunidad] += 1;
+      }
+    }
+    return { totalesPorComunidad: totales, hechosPorComunidad: hechos };
+  }, [realizados, usuario, rutas]);
+
   return (
     <section
       aria-label="Progreso del grupo"
@@ -300,6 +335,23 @@ export function Progreso({
                   total={totalRutas}
                   color="#3f92c9"
                 />
+              </ul>
+            </div>
+
+            <div className="border-t border-roca-800 pt-3">
+              <h3 className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
+                Por comunidad
+              </h3>
+              <ul className="mt-2 space-y-2">
+                {COMUNIDADES.map(({ clave, etiqueta }) => (
+                  <BarraProgreso
+                    key={clave}
+                    etiqueta={etiqueta}
+                    hechos={hechosPorComunidad[clave]}
+                    total={totalesPorComunidad[clave]}
+                    color="#7fa8b8"
+                  />
+                ))}
               </ul>
             </div>
 

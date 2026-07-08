@@ -132,6 +132,7 @@ for (const zona of ZONAS_PIRINEO) {
       nombre,
       altitud: altitudMdt ?? alt,
       coordenadas,
+      comunidad: zona.clave,
       fuente: { origen: "osm", osmTipo: el.type, osmId: el.id },
     });
     admitidos += 1;

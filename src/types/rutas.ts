@@ -1,4 +1,4 @@
-import type { FuenteDatos } from "./catalogo";
+import type { Comunidad, FuenteDatos } from "./catalogo";
 
 /** Red de senderos: GR (gran recorrido), PR (pequeño recorrido), SL (local). */
 export type RedRuta = "gr" | "pr" | "sl";
@@ -18,6 +18,8 @@ export interface Ruta {
   perfil: [number, number][];
   /** Trazado simplificado para el mapa, en partes [ [lng,lat], ... ]. */
   partes: [number, number][][];
+  /** Primera comunidad en la que se encontró la ruta (ver nota en Comunidad). */
+  comunidad?: Comunidad;
   fuente: FuenteDatos;
 }
 

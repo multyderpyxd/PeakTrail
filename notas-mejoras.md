@@ -63,6 +63,18 @@ correcta; esto es margen de mejora.
   no encajan en «rutas del Pirineo». Afinar con un corte de latitud por
   longitud (banda que sigue la cresta) o un tope de distancia total.
 
+## Estadísticas (Hito 14)
+
+- **Reparto por comarca**: el Hito 14 reparte «Por comunidad» (Aragón,
+  Navarra, Cataluña) en el panel de progreso, con el campo `comunidad` que
+  ya se asigna en la generación del catálogo y las rutas. Pendiente afinar
+  a un nivel más útil de verdad: la comarca (división real en OSM,
+  `admin_level=7`), para poder agrupar por zonas con sentido de montaña
+  (Sobrarbe, Ribagorza, Pallars Sobirà...) en vez de solo por comunidad
+  autónoma. Es una mejora sustancial (nueva consulta a Overpass, asignar
+  cada elemento/ruta a su comarca, desglose de dos niveles en el panel) que
+  se hará como hito futuro — anotado como Hito 22 en `planning.md`.
+
 ## Catálogo (fase 2)
 
 - **Sitios de interés adicionales**: miradores (`tourism=viewpoint`),

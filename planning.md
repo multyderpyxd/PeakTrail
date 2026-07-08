@@ -169,4 +169,14 @@ Separadas a propósito en hitos cortos para implementarlas con calma, por orden 
 - **Hito 20 — Fichas enriquecidas**: descripción y foto libre desde Wikidata/Wikipedia para los picos que traen la etiqueta en OSM.
 - **Hito 21 — Social, segunda ronda**: miniaturas de fotos para la galería y comentarios/fotos en vivo con onSnapshot.
 
+### Hito 22 — Estadísticas por comarca (mejora sustancial, futura)
+El Hito 14 reparte el catálogo y las rutas por comunidad autónoma (campo
+`comunidad`, asignado en la generación). Pendiente un reparto más fino por
+comarca (división político-administrativa real en OSM, `admin_level=7`
+en Aragón/Navarra/Cataluña) para que apartados como «dónde me queda
+Monte Perdido» sean posibles. Requiere: consultar los límites de comarca en
+Overpass, asignar cada elemento y ruta a la suya (las rutas largas pueden
+cruzar varias, igual que con la comunidad), regenerar catálogo y rutas, y
+un desglose de dos niveles (comunidad → comarca) en el panel de progreso.
+
 El Hito 9 (PWA/offline) queda en la recámara para cuando la app pase a uso real en el monte.

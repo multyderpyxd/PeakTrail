@@ -38,9 +38,10 @@ export async function consultarOverpass(consulta, etiqueta) {
 }
 
 /** Comunidades del Pirineo peninsular por código ISO (admin_level 4) y la
- * latitud mínima que deja fuera el llano de cada una. */
+ * latitud mínima que deja fuera el llano de cada una. `clave` es el valor
+ * que se guarda en los datos (campo `comunidad` de elementos y rutas). */
 export const ZONAS_PIRINEO = [
-  { nombre: "Aragón", iso: "ES-AR", latMinima: 42.3 },
-  { nombre: "Navarra", iso: "ES-NC", latMinima: 42.6 },
-  { nombre: "Cataluña", iso: "ES-CT", latMinima: 42.1 },
+  { nombre: "Aragón", clave: "aragon", iso: "ES-AR", latMinima: 42.3 },
+  { nombre: "Navarra", clave: "navarra", iso: "ES-NC", latMinima: 42.6 },
+  { nombre: "Cataluña", clave: "cataluna", iso: "ES-CT", latMinima: 42.1 },
 ];

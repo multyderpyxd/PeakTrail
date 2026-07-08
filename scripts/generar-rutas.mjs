@@ -199,7 +199,14 @@ out geom;
 `;
     console.log(`Descargando rutas de Overpass: ${zona.nombre} (${redes.join("+")})...`);
     const elements = await consultarOverpass(consulta, `${zona.nombre} ${redes.join("+")}`);
-    for (const rel of elements) relacionesPorId.set(rel.id, rel);
+    for (const rel of elements) {
+      // Una relación transfronteriza (GR-11, HRP...) puede salir de más de
+      // una zona: se acumulan todas las que la tocan, en orden de consulta,
+      // y la primera hace de comunidad "principal" para las estadísticas
+      const previas = relacionesPorId.get(rel.id)?._comunidades ?? [];
+      rel._comunidades = previas.includes(zona.clave) ? previas : [...previas, zona.clave];
+      relacionesPorId.set(rel.id, rel);
+    }
     trozosHechos.add(clave);
     console.log(`  ${elements.length} relaciones`);
     await guardarCacheRelaciones();
@@ -324,6 +331,7 @@ for (const rel of relaciones) {
           +lat.toFixed(5),
         ]),
       ),
+      comunidad: rel._comunidades?.[0],
       fuente: { origen: "osm", osmTipo: "relation", osmId: rel.id },
     });
     if (rutas.length % 25 === 0) {
