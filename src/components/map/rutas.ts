@@ -74,6 +74,24 @@ export function invertirRuta(ruta: Ruta): Ruta {
   };
 }
 
+/** Salida y llegada de una línea suelta (plan propio, actividad de Strava). */
+export function extremosLinea(
+  linea: [number, number][],
+): FeatureCollection<Point> {
+  if (linea.length < 2) return { type: "FeatureCollection", features: [] };
+  return {
+    type: "FeatureCollection",
+    features: [
+      { rol: "ruta-inicio", coords: linea[0] },
+      { rol: "ruta-fin", coords: linea[linea.length - 1] },
+    ].map(({ rol, coords }) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: coords },
+      properties: { rol },
+    })),
+  };
+}
+
 /** Salida y llegada de la ruta (primer y último punto del trazado). */
 export function extremosRuta(ruta: Ruta): FeatureCollection<Point> {
   const primera = ruta.partes[0];
@@ -89,6 +107,42 @@ export function extremosRuta(ruta: Ruta): FeatureCollection<Point> {
       properties: { rol },
     })),
   };
+}
+
+/**
+ * Punto de una línea suelta a `km` del inicio, caminando su propia longitud.
+ * Vale para el cursor del perfil de planes y actividades: su perfil se midió
+ * sobre esta misma geometría, así que los km coinciden sin normalizar.
+ */
+export function puntoEnLinea(
+  linea: [number, number][],
+  km: number,
+): [number, number] {
+  let objetivo = Math.max(0, km) * 1000;
+  for (let i = 1; i < linea.length; i++) {
+    const d = haversine(linea[i - 1], linea[i]);
+    if (objetivo <= d) {
+      const f = d === 0 ? 0 : objetivo / d;
+      return [
+        linea[i - 1][0] + (linea[i][0] - linea[i - 1][0]) * f,
+        linea[i - 1][1] + (linea[i][1] - linea[i - 1][1]) * f,
+      ];
+    }
+    objetivo -= d;
+  }
+  return linea[linea.length - 1];
+}
+
+/** Caja envolvente de una línea suelta. */
+export function limitesLinea(linea: [number, number][]): LngLatBoundsLike {
+  let [oeste, sur, este, norte] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const [lng, lat] of linea) {
+    oeste = Math.min(oeste, lng);
+    este = Math.max(este, lng);
+    sur = Math.min(sur, lat);
+    norte = Math.max(norte, lat);
+  }
+  return [oeste, sur, este, norte];
 }
 
 /**

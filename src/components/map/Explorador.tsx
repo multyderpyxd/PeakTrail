@@ -4,11 +4,14 @@ import type { ElementoGeografico, TipoElemento } from "@/types/catalogo";
 import type { Comunidad } from "@/types/catalogo";
 import type { RedRuta, Ruta } from "@/types/rutas";
 import { idRealizado, type Realizado } from "@/lib/realizados";
+import type { ActividadStrava } from "@/lib/strava";
 import { elementosPorId } from "./elementos";
 import { COLOR_TIPO } from "./marcadores";
 import { COLOR_RED } from "./rutas";
+import { COLOR_ACTIVIDAD } from "./actividades-capa";
 import type { ResultadoBusqueda } from "./Buscador";
 import {
+  IconoActividad,
   IconoCerrar,
   IconoCollado,
   IconoHecho,
@@ -19,12 +22,13 @@ import {
 
 /**
  * Explorador del catálogo: lista ordenable complementaria al mapa, por tipo
- * (más las rutas), con filtro de texto, comunidad y estado hecho/pendiente.
- * Una fila lleva al elemento en el mapa y abre su ficha.
+ * (más las rutas y las salidas de Strava), con filtro de texto, comunidad y
+ * estado hecho/pendiente. Una fila lleva al elemento en el mapa y abre su
+ * ficha.
  */
 
-type Pestana = TipoElemento | "ruta";
-type CampoOrden = "nombre" | "medida" | "hecho";
+type Pestana = TipoElemento | "ruta" | "actividad";
+type CampoOrden = "nombre" | "medida" | "hecho" | "fecha";
 
 const PESTANAS: { clave: Pestana; etiqueta: string }[] = [
   { clave: "pico", etiqueta: "Picos" },
@@ -32,6 +36,7 @@ const PESTANAS: { clave: Pestana; etiqueta: string }[] = [
   { clave: "ibon", etiqueta: "Ibones" },
   { clave: "refugio", etiqueta: "Refugios" },
   { clave: "ruta", etiqueta: "Rutas" },
+  { clave: "actividad", etiqueta: "Salidas" },
 ];
 
 const ICONO_TIPO = {
@@ -61,26 +66,35 @@ interface FilaDatos {
   id: string;
   nombre: string;
   clave: string;
-  /** Altitud (elementos) o distancia en km (rutas); null si no tiene. */
+  /** Altitud (elementos) o distancia en km (rutas/salidas); null si no tiene. */
   medida: number | null;
   comunidad?: Comunidad;
   hecho: boolean;
-  resultado: ResultadoBusqueda;
+  /** Catálogo y rutas navegan con onIr; las salidas con onVerActividad. */
+  resultado?: ResultadoBusqueda;
+  actividad?: ActividadStrava;
   red?: RedRuta;
   ref?: string | null;
+  /** YYYY-MM-DD, solo en salidas de Strava. */
+  fecha?: string;
 }
 
 export function Explorador({
   rutas,
+  actividades,
   realizados,
   usuario,
   onIr,
+  onVerActividad,
   onCerrar,
 }: {
   rutas: Map<string, Ruta> | null;
+  /** Salidas de Strava en caché; null si nunca se importaron. */
+  actividades: ActividadStrava[] | null;
   realizados: Map<string, Realizado>;
   usuario: User | null;
   onIr: (resultado: ResultadoBusqueda) => void;
+  onVerActividad: (actividad: ActividadStrava) => void;
   onCerrar: () => void;
 }) {
   const [pestana, setPestana] = useState<Pestana>("pico");
@@ -100,6 +114,17 @@ export function Explorador({
 
   // Filas de la pestaña activa, con todo lo necesario para filtrar y ordenar
   const filas = useMemo<FilaDatos[]>(() => {
+    if (pestana === "actividad") {
+      return (actividades ?? []).map((actividad) => ({
+        id: String(actividad.id),
+        nombre: actividad.nombre,
+        clave: normalizar(actividad.nombre),
+        medida: actividad.distanciaKm,
+        hecho: true,
+        actividad,
+        fecha: actividad.fecha,
+      }));
+    }
     if (pestana === "ruta") {
       return Array.from(rutas?.values() ?? []).map((ruta) => ({
         id: ruta.id,
@@ -129,7 +154,7 @@ export function Explorador({
     return lista;
     // realizados/usuario cambian el campo hecho; elementosPorId es estable tras cargar
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pestana, rutas, realizados, usuario]);
+  }, [pestana, rutas, actividades, realizados, usuario]);
 
   const visibles = useMemo(() => {
     const buscado = normalizar(texto.trim());
@@ -149,6 +174,10 @@ export function Explorador({
       if (orden.campo === "nombre") {
         return factor * a.nombre.localeCompare(b.nombre, "es");
       }
+      if (orden.campo === "fecha") {
+        // YYYY-MM-DD ordena bien como texto
+        return factor * (a.fecha ?? "").localeCompare(b.fecha ?? "");
+      }
       if (orden.campo === "hecho") {
         if (a.hecho !== b.hecho) return factor * (a.hecho ? -1 : 1);
         return a.nombre.localeCompare(b.nombre, "es");
@@ -166,11 +195,13 @@ export function Explorador({
     setPestana(nueva);
     setLimite(PASO_LISTA);
     // Orden natural de cada pestaña: cota descendente para el catálogo con
-    // altitud, alfabético para rutas
+    // altitud, alfabético para rutas y más recientes primero para salidas
     setOrden(
       nueva === "ruta"
         ? { campo: "nombre", asc: true }
-        : { campo: "medida", asc: false },
+        : nueva === "actividad"
+          ? { campo: "fecha", asc: false }
+          : { campo: "medida", asc: false },
     );
   }
 
@@ -206,7 +237,13 @@ export function Explorador({
     );
   }
 
-  const Icono = pestana !== "ruta" ? ICONO_TIPO[pestana] : null;
+  const Icono =
+    pestana !== "ruta" && pestana !== "actividad" ? ICONO_TIPO[pestana] : null;
+  const esSalidas = pestana === "actividad";
+  // La pestaña de salidas solo aparece con actividades importadas en caché
+  const pestanasVisibles = PESTANAS.filter(
+    ({ clave }) => clave !== "actividad" || actividades !== null,
+  );
 
   return (
     <section
@@ -229,7 +266,7 @@ export function Explorador({
 
       <div className="space-y-2.5 border-b border-roca-800 p-4 py-3">
         <div className="flex flex-wrap gap-1.5" role="tablist">
-          {PESTANAS.map(({ clave, etiqueta }) => (
+          {pestanasVisibles.map(({ clave, etiqueta }) => (
             <button
               key={clave}
               type="button"
@@ -259,24 +296,26 @@ export function Explorador({
             aria-label="Filtrar por nombre"
             className="min-w-0 flex-1 rounded border border-roca-700 bg-roca-900/70 px-2.5 py-1 text-xs text-nieve placeholder:text-roca-500 focus:border-ocre-600 focus:outline-none [&::-webkit-search-cancel-button]:hidden"
           />
-          <select
-            value={comunidad}
-            onChange={(e) => {
-              setComunidad(e.target.value as Comunidad | "todas");
-              setLimite(PASO_LISTA);
-            }}
-            aria-label="Filtrar por comunidad"
-            className="rounded border border-roca-700 bg-roca-900/70 px-1.5 py-1 text-xs text-hielo-200 focus:border-ocre-600 focus:outline-none"
-          >
-            {COMUNIDADES.map(({ clave, etiqueta }) => (
-              <option key={clave} value={clave}>
-                {etiqueta}
-              </option>
-            ))}
-          </select>
+          {!esSalidas && (
+            <select
+              value={comunidad}
+              onChange={(e) => {
+                setComunidad(e.target.value as Comunidad | "todas");
+                setLimite(PASO_LISTA);
+              }}
+              aria-label="Filtrar por comunidad"
+              className="rounded border border-roca-700 bg-roca-900/70 px-1.5 py-1 text-xs text-hielo-200 focus:border-ocre-600 focus:outline-none"
+            >
+              {COMUNIDADES.map(({ clave, etiqueta }) => (
+                <option key={clave} value={clave}>
+                  {etiqueta}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
-        {usuario && (
+        {usuario && !esSalidas && (
           <div className="flex gap-1.5" role="group" aria-label="Filtrar por estado">
             {(
               [
@@ -311,12 +350,18 @@ export function Explorador({
           Nombre
         </CabeceraOrden>
         <CabeceraOrden campo="medida" className="w-20 text-right">
-          {pestana === "ruta" ? "Km" : "Altitud"}
+          {pestana === "ruta" || esSalidas ? "Km" : "Altitud"}
         </CabeceraOrden>
-        {usuario && (
-          <CabeceraOrden campo="hecho" className="w-9 text-right">
-            Hecho
+        {esSalidas ? (
+          <CabeceraOrden campo="fecha" className="w-20 text-right">
+            Fecha
           </CabeceraOrden>
+        ) : (
+          usuario && (
+            <CabeceraOrden campo="hecho" className="w-9 text-right">
+              Hecho
+            </CabeceraOrden>
+          )
         )}
       </div>
 
@@ -325,7 +370,10 @@ export function Explorador({
           <li key={fila.id}>
             <button
               type="button"
-              onClick={() => onIr(fila.resultado)}
+              onClick={() => {
+                if (fila.actividad) onVerActividad(fila.actividad);
+                else if (fila.resultado) onIr(fila.resultado);
+              }}
               className="flex w-full items-center gap-2 px-4 py-1.5 text-left transition-colors hover:bg-roca-900"
             >
               {fila.red ? (
@@ -334,6 +382,10 @@ export function Explorador({
                   style={{ backgroundColor: COLOR_RED[fila.red] }}
                 >
                   {fila.ref ?? fila.red.toUpperCase()}
+                </span>
+              ) : fila.actividad ? (
+                <span className="shrink-0" style={{ color: COLOR_ACTIVIDAD }}>
+                  <IconoActividad width={14} height={14} />
                 </span>
               ) : (
                 Icono && (
@@ -350,19 +402,30 @@ export function Explorador({
               </span>
               <span className="w-20 shrink-0 text-right text-xs tabular-nums text-hielo-300">
                 {fila.medida !== null
-                  ? pestana === "ruta"
+                  ? pestana === "ruta" || esSalidas
                     ? `${fila.medida.toLocaleString("es-ES")} km`
                     : `${fila.medida.toLocaleString("es-ES")} m`
                   : "—"}
               </span>
-              {usuario && (
-                <span className="w-9 shrink-0 text-right">
-                  {fila.hecho && (
-                    <span className="inline-block text-pino-300">
-                      <IconoHecho width={14} height={14} />
-                    </span>
-                  )}
+              {esSalidas ? (
+                <span className="w-20 shrink-0 text-right text-[11px] tabular-nums text-roca-300">
+                  {fila.fecha
+                    ? new Date(`${fila.fecha}T12:00:00`).toLocaleDateString(
+                        "es-ES",
+                        { day: "2-digit", month: "2-digit", year: "2-digit" },
+                      )
+                    : "—"}
                 </span>
+              ) : (
+                usuario && (
+                  <span className="w-9 shrink-0 text-right">
+                    {fila.hecho && (
+                      <span className="inline-block text-pino-300">
+                        <IconoHecho width={14} height={14} />
+                      </span>
+                    )}
+                  </span>
+                )
               )}
             </button>
           </li>

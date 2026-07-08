@@ -31,9 +31,12 @@ import {
   cargarRutas,
   coleccionRutas,
   COLOR_RED,
+  extremosLinea,
   extremosRuta,
   invertirRuta,
+  limitesLinea,
   limitesRuta,
+  puntoEnLinea,
   puntoEnRuta,
 } from "./rutas";
 import { FichaElemento } from "./FichaElemento";
@@ -71,6 +74,7 @@ import {
   coleccionActividades,
 } from "./actividades-capa";
 import { leerActividades } from "@/lib/actividades";
+import { decodificarPolilinea } from "@/lib/emparejar";
 import type { ActividadStrava } from "@/lib/strava";
 import { procesarRetornoStrava } from "@/lib/strava";
 import { guardarPreferencias, leerPreferencias } from "@/lib/preferencias";
@@ -84,6 +88,7 @@ const CAPA_RUTA_EXTREMOS = "ruta-extremos";
 const CAPA_RUTA_CURSOR = "ruta-cursor";
 const CAPA_ACTIVIDADES = "actividades";
 const CAPA_ACTIVIDADES_CASCO = "actividades-casco";
+const CAPA_ACTIVIDAD_DESTACADA = "actividad-destacada";
 const CAPA_ACTIVIDADES_PULSABLE = "actividades-pulsable";
 const CAPA_PLAN_LINEA = "plan-linea";
 const CAPA_PLAN_PULSABLE = "plan-pulsable";
@@ -413,6 +418,18 @@ export default function MapView() {
         paint: { "line-color": "#16130f", "line-width": 4, "line-opacity": 0.55 },
       });
       mapa.addLayer({
+        id: CAPA_ACTIVIDAD_DESTACADA,
+        type: "line",
+        source: CAPA_ACTIVIDADES,
+        layout: {
+          "line-cap": "round",
+          "line-join": "round",
+          visibility: "none",
+        },
+        paint: { "line-color": "#f6f4ee", "line-width": 7, "line-opacity": 0.6 },
+        filter: ["==", ["get", "id"], -1],
+      });
+      mapa.addLayer({
         id: CAPA_ACTIVIDADES,
         type: "line",
         source: CAPA_ACTIVIDADES,
@@ -681,6 +698,7 @@ export default function MapView() {
     for (const capa of [
       CAPA_ACTIVIDADES,
       CAPA_ACTIVIDADES_CASCO,
+      CAPA_ACTIVIDAD_DESTACADA,
       CAPA_ACTIVIDADES_PULSABLE,
     ]) {
       mapa.setLayoutProperty(capa, "visibility", visibilidad);
@@ -708,17 +726,34 @@ export default function MapView() {
     return sentidoInvertido ? invertirRuta(seleccion.ruta) : seleccion.ruta;
   }, [seleccion, sentidoInvertido]);
 
+  // Traza decodificada de la actividad seleccionada (extremos y cursor)
+  const trazaActividad = useMemo(() => {
+    if (seleccion?.clase !== "actividad" || !seleccion.actividad.polilinea)
+      return null;
+    return decodificarPolilinea(seleccion.actividad.polilinea);
+  }, [seleccion]);
+
   useEffect(() => {
     const mapa = mapaRef.current;
     if (!mapa || !cargado) return;
     mapa.setFilter(CAPA_RUTA_DESTACADA, ["==", ["get", "id"], rutaVista?.id ?? ""]);
+    mapa.setFilter(CAPA_ACTIVIDAD_DESTACADA, [
+      "==",
+      ["get", "id"],
+      seleccion?.clase === "actividad" ? seleccion.actividad.id : -1,
+    ]);
+    // Salida y llegada: de la ruta del catálogo o de la actividad seleccionada
     (mapa.getSource(CAPA_RUTA_EXTREMOS) as maplibregl.GeoJSONSource).setData(
-      rutaVista ? extremosRuta(rutaVista) : COLECCION_VACIA,
+      rutaVista
+        ? extremosRuta(rutaVista)
+        : trazaActividad
+          ? extremosLinea(trazaActividad)
+          : COLECCION_VACIA,
     );
     (mapa.getSource(CAPA_RUTA_CURSOR) as maplibregl.GeoJSONSource).setData(
       COLECCION_VACIA,
     );
-  }, [rutaVista, cargado]);
+  }, [rutaVista, trazaActividad, seleccion, cargado]);
 
   // --- Planificador ---
 
@@ -1023,24 +1058,59 @@ export default function MapView() {
     }
   }
 
-  function moverCursorPerfil(km: number | null) {
+  function pintarCursor(coordenadas: [number, number] | null) {
     const mapa = mapaRef.current;
-    const ruta = rutaVista;
-    if (!mapa || !cargado || !ruta) return;
+    if (!mapa || !cargado) return;
     (mapa.getSource(CAPA_RUTA_CURSOR) as maplibregl.GeoJSONSource).setData(
-      km === null
+      coordenadas === null
         ? COLECCION_VACIA
         : {
             type: "FeatureCollection",
             features: [
               {
                 type: "Feature",
-                geometry: { type: "Point", coordinates: puntoEnRuta(ruta, km) },
+                geometry: { type: "Point", coordinates: coordenadas },
                 properties: {},
               },
             ],
           },
     );
+  }
+
+  function moverCursorPerfil(km: number | null) {
+    const ruta = rutaVista;
+    if (!ruta) return;
+    pintarCursor(km === null ? null : puntoEnRuta(ruta, km));
+  }
+
+  // Cursor del perfil sobre la traza de la actividad de Strava seleccionada
+  function moverCursorActividad(km: number | null) {
+    if (!trazaActividad) return;
+    pintarCursor(km === null ? null : puntoEnLinea(trazaActividad, km));
+  }
+
+  // Cursor del perfil sobre el plan guardado a la vista o el borrador
+  function moverCursorPlan(km: number | null) {
+    const linea = planVisible ? planVisible.linea : trazadoPlan;
+    if (linea.length < 2) return;
+    pintarCursor(km === null ? null : puntoEnLinea(linea, km));
+  }
+
+  // Abrir una actividad desde el explorador: la capa se enciende (si no, la
+  // selección no sobreviviría al efecto que la limpia con la capa oculta)
+  function verActividad(actividad: ActividadStrava) {
+    setVerExplorador(false);
+    setVerProgreso(false);
+    if (modoPlan) alternarPlanificador();
+    setSentidoInvertido(false);
+    setMostrarActividades(true);
+    setSeleccion({ clase: "actividad", actividad });
+    if (actividad.polilinea) {
+      mapaRef.current?.fitBounds(
+        limitesLinea(decodificarPolilinea(actividad.polilinea)),
+        { padding: { top: 90, right: 90, bottom: 60, left: 400 }, duration: 1200 },
+      );
+    }
   }
 
   function alternarTipo(tipo: TipoElemento) {
@@ -1334,6 +1404,7 @@ export default function MapView() {
           planVisible={planVisible}
           onVerPlan={verPlan}
           onBorrarPlan={borrarPlanGuardado}
+          onCursorPerfil={moverCursorPlan}
           onCerrar={alternarPlanificador}
         />
       )}
@@ -1358,9 +1429,11 @@ export default function MapView() {
       {verExplorador && (
         <Explorador
           rutas={cargado ? rutasRef.current : null}
+          actividades={actividades}
           realizados={realizados}
           usuario={sesion.usuario}
           onIr={irAResultado}
+          onVerActividad={verActividad}
           onCerrar={() => setVerExplorador(false)}
         />
       )}
@@ -1391,6 +1464,7 @@ export default function MapView() {
         <FichaActividad
           actividad={seleccion.actividad}
           onCerrar={() => setSeleccion(null)}
+          onCursorPerfil={moverCursorActividad}
         />
       )}
       {!modoPlan && rutaVista && (

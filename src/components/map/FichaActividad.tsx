@@ -57,9 +57,12 @@ function formatearFecha(fecha: string): string {
 export function FichaActividad({
   actividad,
   onCerrar,
+  onCursorPerfil,
 }: {
   actividad: ActividadStrava;
   onCerrar: () => void;
+  /** Sincroniza el punto azul sobre la traza al recorrer el perfil. */
+  onCursorPerfil?: (km: number | null) => void;
 }) {
   const traza = useMemo(
     () =>
@@ -150,7 +153,7 @@ export function FichaActividad({
             <p className="mb-1 text-[10px] uppercase tracking-[0.18em] text-roca-300">
               Perfil de elevación
             </p>
-            <PerfilElevacion perfil={metricas.perfil} />
+            <PerfilElevacion perfil={metricas.perfil} onPunto={onCursorPerfil} />
           </div>
         ) : (
           traza.length >= 2 && (

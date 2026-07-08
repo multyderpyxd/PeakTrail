@@ -145,6 +145,7 @@ export function Planificador({
   planVisible,
   onVerPlan,
   onBorrarPlan,
+  onCursorPerfil,
   onCerrar,
 }: {
   waypoints: Waypoint[];
@@ -168,6 +169,8 @@ export function Planificador({
   planVisible: RutaPlaneada | null;
   onVerPlan: (plan: RutaPlaneada | null) => void;
   onBorrarPlan: (id: string) => void;
+  /** Sincroniza el punto azul sobre el trazado al recorrer el perfil. */
+  onCursorPerfil?: (km: number | null) => void;
   onCerrar: () => void;
 }) {
   const [nombre, setNombre] = useState("");
@@ -325,7 +328,7 @@ export function Planificador({
                 valor={formatearHoras(tiempoEstimadoHoras(mostrada.perfil))}
               />
             </dl>
-            <PerfilElevacion perfil={mostrada.perfil} />
+            <PerfilElevacion perfil={mostrada.perfil} onPunto={onCursorPerfil} />
           </>
         )}
         {planVisible && (
