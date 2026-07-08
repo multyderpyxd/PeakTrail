@@ -713,7 +713,10 @@ export default function MapView() {
         draggable: true,
         anchor: "center",
       })
-        .setLngLat(wp.lngLat)
+        // El marcador va sobre el nodo enganchado al sendero (donde acaba la
+        // línea), no sobre el clic crudo, para que el punto y el trazado
+        // coincidan aunque el clic caiga a un lado de la senda
+        .setLngLat(nodosPlan[i] ?? wp.lngLat)
         .addTo(mapa);
       marcador.on("dragstart", () => {
         el.style.cursor = "grabbing";
@@ -731,7 +734,7 @@ export default function MapView() {
       for (const m of marcadoresPlan.current) m.remove();
       marcadoresPlan.current = [];
     };
-  }, [waypoints, modoPlan, planVisible, cargado]);
+  }, [waypoints, nodosPlan, modoPlan, planVisible, cargado]);
 
   // Cursor de mira mientras se planifica
   useEffect(() => {
