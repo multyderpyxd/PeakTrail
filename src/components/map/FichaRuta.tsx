@@ -11,6 +11,7 @@ import { COLOR_RED, ETIQUETA_RED } from "./rutas";
 import { IconoCerrar, IconoInvertir } from "@/components/icons";
 import type { User } from "firebase/auth";
 import { MarcarRealizado } from "./MarcarRealizado";
+import { Meteo } from "./Meteo";
 import { PerfilElevacion } from "./PerfilElevacion";
 import { SeccionSocial } from "./SeccionSocial";
 
@@ -54,6 +55,15 @@ export function FichaRuta({
   const enlaceOsm = `https://www.openstreetmap.org/relation/${ruta.fuente.osmId}`;
   const horas = useMemo(() => tiempoEstimadoHoras(ruta.perfil), [ruta]);
   const mide = useMemo(() => midePorRuta(ruta, horas), [ruta, horas]);
+  // Punto medio del trazado para la previsión meteo, con la cota del perfil
+  const medio = useMemo(() => {
+    const puntos = ruta.partes.flat();
+    const p = puntos[Math.floor(puntos.length / 2)];
+    const perfilMedio = ruta.perfil[Math.floor(ruta.perfil.length / 2)];
+    return p
+      ? { lng: p[0], lat: p[1], altitud: perfilMedio?.[1] ?? null }
+      : null;
+  }, [ruta]);
 
   return (
     <section
@@ -149,6 +159,12 @@ export function FichaRuta({
         <div className="mt-1">
           <PerfilElevacion perfil={ruta.perfil} onPunto={onCursorPerfil} />
         </div>
+
+        {medio && (
+          <div className="mt-3 border-t border-roca-800 pt-3">
+            <Meteo lat={medio.lat} lng={medio.lng} altitud={medio.altitud} />
+          </div>
+        )}
 
         <MarcarRealizado
           realizado={realizado}

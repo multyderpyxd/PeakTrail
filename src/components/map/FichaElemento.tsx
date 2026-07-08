@@ -3,6 +3,7 @@ import type { Realizado } from "@/lib/realizados";
 import type { User } from "firebase/auth";
 import { COLOR_TIPO } from "./marcadores";
 import { MarcarRealizado } from "./MarcarRealizado";
+import { Meteo } from "./Meteo";
 import { SeccionSocial } from "./SeccionSocial";
 import {
   IconoCerrar,
@@ -119,6 +120,9 @@ export function FichaElemento({
             </>
           )}
         </p>
+        <div className="border-t border-roca-800 pt-3">
+          <Meteo lat={lat} lng={lng} altitud={elemento.altitud} />
+        </div>
         <MarcarRealizado
           realizado={realizado}
           puedeMarcar={puedeMarcar}

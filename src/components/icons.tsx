@@ -215,3 +215,104 @@ export function IconoToponimo(props: SVGProps<SVGSVGElement>) {
     </Base>
   );
 }
+
+/* --- Iconografía meteo (glifos propios, un estado del cielo cada uno) --- */
+
+const SOL = (
+  <>
+    <circle cx="12" cy="12" r="3.8" />
+    <path d="M12 3.4v2.3M12 18.3v2.3M3.4 12h2.3M18.3 12h2.3M5.9 5.9l1.6 1.6M16.5 16.5l1.6 1.6M18.1 5.9l-1.6 1.6M7.5 16.5l-1.6 1.6" />
+  </>
+);
+
+// Nubes: cuerpo standalone (más bajo) y variante alta que deja sitio a la
+// precipitación debajo
+const NUBE_BAJA =
+  "M8 17h8a3.3 3.3 0 0 0 .1-6.6 4.3 4.3 0 0 0-8.3-1.1A3.2 3.2 0 0 0 8 17Z";
+const NUBE_ALTA =
+  "M8 15h8a3.2 3.2 0 0 0 .1-6.4 4.2 4.2 0 0 0-8.1-1.1A3.1 3.1 0 0 0 8 15Z";
+
+const SOL_PEQUENO = (
+  <>
+    <circle cx="9" cy="9.4" r="2.5" />
+    <path d="M9 4.4v1.6M4 9.4h1.6M5.7 6.1l1.1 1.1M12.3 6.1l-1.1 1.1" />
+  </>
+);
+const NUBE_FRENTE =
+  "M10 18.5h6.5a2.8 2.8 0 0 0 .1-5.6 3.6 3.6 0 0 0-6.9-.9A2.7 2.7 0 0 0 10 18.5Z";
+
+export function IconoMeteo({
+  estado,
+  ...props
+}: SVGProps<SVGSVGElement> & { estado: string }) {
+  switch (estado) {
+    case "despejado":
+      return <Base {...props}>{SOL}</Base>;
+    case "poco-nuboso":
+      return (
+        <Base {...props}>
+          {SOL_PEQUENO}
+          <path d={NUBE_FRENTE} />
+        </Base>
+      );
+    case "nuboso":
+      return (
+        <Base {...props}>
+          <path d={NUBE_BAJA} />
+        </Base>
+      );
+    case "niebla":
+      return (
+        <Base {...props}>
+          <path d={NUBE_BAJA} />
+          <path d="M7.5 19.5h9M9.5 22h5" />
+        </Base>
+      );
+    case "lluvia":
+      return (
+        <Base {...props}>
+          <path d={NUBE_ALTA} />
+          <path d="M9.5 17.5l-1 2.6M12.5 17.5l-1 2.6M15.5 17.5l-1 2.6" />
+        </Base>
+      );
+    case "chubascos":
+      return (
+        <Base {...props}>
+          {SOL_PEQUENO}
+          <path d={NUBE_FRENTE} />
+          <path d="M11 19.8l-.8 2M14 19.8l-.8 2" />
+        </Base>
+      );
+    case "nieve":
+      return (
+        <Base {...props}>
+          <path d={NUBE_ALTA} />
+          <path d="M9.5 18v2M8.5 19h2M12.5 18v2M11.5 19h2M15.5 18v2M14.5 19h2" />
+        </Base>
+      );
+    case "tormenta":
+      return (
+        <Base {...props}>
+          <path d={NUBE_ALTA} />
+          <path d="M12.5 16 10 19.6h2.2l-1.2 3.1" />
+        </Base>
+      );
+    default:
+      return (
+        <Base {...props}>
+          <path d={NUBE_BAJA} />
+        </Base>
+      );
+  }
+}
+
+/** Viento: dos rachas curvas. */
+export function IconoViento(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <path d="M3 8.5h11a2.5 2.5 0 1 0-2.5-2.5" />
+      <path d="M3 15.5h14a2.5 2.5 0 1 1-2.5 2.5" />
+      <path d="M3 12h6" />
+    </Base>
+  );
+}
