@@ -42,6 +42,12 @@ import { medirLinea, type MetricasLinea } from "@/lib/elevacion";
 import { enrutarSegmento, type SegmentoRuta } from "@/lib/enrutador";
 import { construirGpx, descargarGpx, leerGpx } from "@/lib/gpx";
 import {
+  claveSegmento,
+  coserTrazado,
+  indiceDeInsercion,
+  nodosDelPlan,
+} from "@/lib/plan";
+import {
   borrarPlan,
   guardarPlan,
   isFirebaseConfigured,
@@ -68,6 +74,7 @@ const CAPA_RUTA_DESTACADA = "ruta-destacada";
 const CAPA_RUTA_EXTREMOS = "ruta-extremos";
 const CAPA_RUTA_CURSOR = "ruta-cursor";
 const CAPA_PLAN_LINEA = "plan-linea";
+const CAPA_PLAN_PULSABLE = "plan-pulsable";
 const CAPA_PLAN_PUNTOS = "plan-puntos";
 const CAPA_DESTELLO = "elemento-destello";
 
@@ -86,16 +93,6 @@ function crearWaypoint(lngLat: [number, number]): Waypoint {
       ? crypto.randomUUID()
       : `wp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return { id, lngLat };
-}
-
-/** Clave de caché de un segmento: modo + par de coordenadas redondeadas. */
-function claveSegmento(
-  porSenderos: boolean,
-  a: [number, number],
-  b: [number, number],
-): string {
-  const p = (c: [number, number]) => `${c[0].toFixed(6)},${c[1].toFixed(6)}`;
-  return `${porSenderos ? "s" : "r"}|${p(a)}|${p(b)}`;
 }
 
 /**
@@ -193,6 +190,11 @@ export default function MapView() {
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const [segmentos, setSegmentos] = useState<SegmentoRuta[]>([]);
   const cacheSegmentos = useRef(new Map<string, SegmentoRuta>());
+  // El manejador de clic del mapa se registra una sola vez: estos refs le dan
+  // acceso a los segmentos y al plan visible frescos (mismo patrón que
+  // modoPlanRef y destellarElementoRef)
+  const segmentosRef = useRef<SegmentoRuta[]>([]);
+  const planVisibleRef = useRef<RutaPlaneada | null>(null);
   const [modoSenderos, setModoSenderos] = useState(true);
   const [enrutando, setEnrutando] = useState(false);
   const [metricasPlan, setMetricasPlan] = useState<MetricasLinea | null>(null);
@@ -436,6 +438,15 @@ export default function MapView() {
           "line-width": 3,
         },
       });
+      // Franja invisible ancha sobre la línea del borrador: pulsar sobre ella
+      // inserta un punto intermedio en vez de añadirlo al final
+      mapa.addLayer({
+        id: CAPA_PLAN_PULSABLE,
+        type: "line",
+        source: CAPA_PLAN_LINEA,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": "#000000", "line-width": 18, "line-opacity": 0.01 },
+      });
       mapa.addSource(CAPA_PLAN_PUNTOS, { type: "geojson", data: COLECCION_VACIA });
       mapa.addLayer({
         id: CAPA_PLAN_PUNTOS,
@@ -470,11 +481,27 @@ export default function MapView() {
     mapa.on("click", (e) => {
       cancelarDestelloRef.current();
       if (modoPlanRef.current) {
+        const clic: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+        // Pulsar sobre la línea del borrador inserta el punto entre los dos
+        // waypoints de ese tramo (Komoot-style); en otro caso, se añade al final
+        if (!planVisibleRef.current && mapa.getLayer(CAPA_PLAN_PULSABLE)) {
+          const sobreLinea = mapa.queryRenderedFeatures(e.point, {
+            layers: [CAPA_PLAN_PULSABLE],
+          });
+          if (sobreLinea.length > 0) {
+            const indice = indiceDeInsercion(segmentosRef.current, clic);
+            if (indice !== null) {
+              setWaypoints((w) => [
+                ...w.slice(0, indice),
+                crearWaypoint(clic),
+                ...w.slice(indice),
+              ]);
+              return;
+            }
+          }
+        }
         setPlanVisible(null);
-        setWaypoints((w) => [
-          ...w,
-          crearWaypoint([e.lngLat.lng, e.lngLat.lat]),
-        ]);
+        setWaypoints((w) => [...w, crearWaypoint(clic)]);
         return;
       }
       const capas = [CAPA_ELEMENTOS, CAPA_RUTAS_PULSABLE].filter((c) =>
@@ -614,31 +641,20 @@ export default function MapView() {
     };
   }, [waypoints, modoSenderos]);
 
-  // Posición «de nodo» de cada waypoint: el enganche al sendero si algún
-  // segmento contiguo va por senderos, y si no el propio clic. Da continuidad
-  // al trazado, que pasa por estos nodos.
+  // Posición visible de cada waypoint y trazado cosido (lógica en lib/plan.ts,
+  // probada aparte). Los segmentos ya traen resuelto snap/conector, así que la
+  // línea llega siempre a los marcadores por construcción.
+  segmentosRef.current = segmentos;
+  planVisibleRef.current = planVisible;
   const nodosPlan = useMemo<[number, number][]>(
-    () =>
-      waypoints.map((wp, i) => {
-        const saliente = segmentos[i];
-        const entrante = segmentos[i - 1];
-        if (saliente?.porSenderos) return saliente.inicio;
-        if (entrante?.porSenderos) return entrante.fin;
-        return wp.lngLat;
-      }),
+    () => nodosDelPlan(waypoints, segmentos),
     [waypoints, segmentos],
   );
 
-  const trazadoPlan = useMemo<[number, number][]>(() => {
-    if (segmentos.length === 0 || nodosPlan.length < 2) return [];
-    const linea: [number, number][] = [nodosPlan[0]];
-    for (let i = 0; i < segmentos.length; i++) {
-      const cs = segmentos[i].coords;
-      for (let j = 1; j < cs.length - 1; j++) linea.push(cs[j]);
-      linea.push(nodosPlan[i + 1]);
-    }
-    return linea;
-  }, [segmentos, nodosPlan]);
+  const trazadoPlan = useMemo<[number, number][]>(
+    () => coserTrazado(segmentos),
+    [segmentos],
+  );
 
   // Métricas del borrador (elevación muestreada), con un pequeño debounce
   useEffect(() => {

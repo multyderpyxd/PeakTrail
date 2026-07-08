@@ -292,7 +292,8 @@ export function Planificador({
                   </BotonSecundario>
                 </div>
                 <p className="text-[11px] text-roca-400">
-                  Arrastra los puntos sobre el mapa para reubicarlos; usa las
+                  Arrastra los puntos sobre el mapa para reubicarlos, pulsa
+                  sobre la línea para insertar uno intermedio y usa las
                   flechas para reordenarlos.
                 </p>
               </>

@@ -77,10 +77,18 @@ correcta; esto es margen de mejora.
 
 ## Planificador (Hito 17)
 
-- **Insertar un punto en mitad de la ruta**: hoy los clics añaden siempre al
-  final; para meter un punto entre dos existentes hay que reordenar con las
-  flechas. Se podría permitir arrastrar la propia línea para crear un punto
-  intermedio (estilo Komoot) o insertar en una posición concreta de la lista.
+- ~~**Insertar un punto en mitad de la ruta**~~: hecho en la mejora
+  post-Hito 17 (pulsar sobre la línea inserta el punto en el tramo correcto,
+  con Turf `nearestPointOnLine`).
+- **Perfil propio de BRouter**: el enrutado usa el perfil estándar
+  `hiking-mountain` del servidor público. BRouter admite perfiles a medida
+  (penalizar sac_scale alto, preferir senderos balizados GR/PR); si el grupo
+  quiere afinar el criterio, se puede subir un perfil propio o autoalojar
+  BRouter (gratuito, un jar + datos por región).
+- **Usar la elevación que ya devuelve BRouter**: cada vértice llega con cota
+  (SRTM). Hoy se descarta y el perfil se muestrea aparte con terrarium
+  (uniforme para tramos rectos e importados); usarla ahorraría peticiones de
+  teselas en trazados largos por senderos.
 - **Editar una traza importada**: al importar un GPX la traza se conserva
   íntegra como un único segmento salida→llegada (caché sembrada); si se
   arrastra un extremo, ese tramo se recalcula (recto/senderos) y se pierde la

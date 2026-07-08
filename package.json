@@ -10,9 +10,13 @@
     "catalogo:generar": "node scripts/generar-catalogo.mjs",
     "rutas:generar": "node scripts/generar-rutas.mjs",
     "catalogo:importar": "node --env-file=.env.local scripts/importar-firestore.mjs",
-    "invitados:anadir": "node --env-file=.env.local scripts/invitar.mjs"
+    "invitados:anadir": "node --env-file=.env.local scripts/invitar.mjs",
+    "test": "vitest run",
+    "test:red": "PROBAR_RED=1 vitest run"
   },
   "dependencies": {
+    "@turf/helpers": "^7.3.5",
+    "@turf/nearest-point-on-line": "^7.3.5",
     "firebase": "^11.10.0",
     "maplibre-gl": "^5.24.0",
     "next": "^15.3.4",
@@ -30,6 +34,7 @@
     "geotiff": "^3.0.5",
     "pngjs": "^7.0.0",
     "tailwindcss": "^4.1.11",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.10"
   }
 }
