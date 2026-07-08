@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { MetricasLinea } from "@/lib/elevacion";
+import { descargarGpx, planAGpx } from "@/lib/gpx";
 import { formatearHoras, tiempoEstimadoHoras } from "@/lib/metricas-ruta";
 import type { RutaPlaneada, Waypoint } from "@/types/plan";
 import {
   IconoCerrar,
+  IconoDescargar,
   IconoDeshacer,
+  IconoImportar,
   IconoPapelera,
 } from "@/components/icons";
 import { PerfilElevacion } from "./PerfilElevacion";
@@ -131,6 +134,8 @@ export function Planificador({
   onLimpiar,
   onEliminar,
   onMover,
+  onImportarGpx,
+  onDescargarBorrador,
   onGuardar,
   guardando,
   firebaseListo,
@@ -150,6 +155,8 @@ export function Planificador({
   onLimpiar: () => void;
   onEliminar: (id: string) => void;
   onMover: (indice: number, direccion: -1 | 1) => void;
+  onImportarGpx: (archivo: File) => void;
+  onDescargarBorrador: (() => void) | null;
   onGuardar: (nombre: string) => void;
   guardando: boolean;
   firebaseListo: boolean;
@@ -160,6 +167,7 @@ export function Planificador({
   onCerrar: () => void;
 }) {
   const [nombre, setNombre] = useState("");
+  const inputGpx = useRef<HTMLInputElement>(null);
   const numPuntos = waypoints.length;
   const mostrada = planVisible
     ? {
@@ -235,6 +243,30 @@ export function Planificador({
               </div>
             </div>
 
+            <div className="flex flex-wrap gap-2">
+              <input
+                ref={inputGpx}
+                type="file"
+                accept=".gpx,application/gpx+xml"
+                className="hidden"
+                onChange={(e) => {
+                  const archivo = e.target.files?.[0];
+                  if (archivo) onImportarGpx(archivo);
+                  e.target.value = "";
+                }}
+              />
+              <BotonSecundario onClick={() => inputGpx.current?.click()}>
+                <IconoImportar width={13} height={13} />
+                Importar GPX
+              </BotonSecundario>
+              {onDescargarBorrador && (
+                <BotonSecundario onClick={onDescargarBorrador}>
+                  <IconoDescargar width={13} height={13} />
+                  Descargar GPX
+                </BotonSecundario>
+              )}
+            </div>
+
             {numPuntos > 0 && (
               <>
                 <ul className="space-y-1.5">
@@ -290,6 +322,16 @@ export function Planificador({
             </dl>
             <PerfilElevacion perfil={mostrada.perfil} />
           </>
+        )}
+        {planVisible && (
+          <BotonSecundario
+            onClick={() =>
+              descargarGpx(planVisible.nombre, planAGpx(planVisible))
+            }
+          >
+            <IconoDescargar width={13} height={13} />
+            Descargar GPX
+          </BotonSecundario>
         )}
         {midiendo && !planVisible && (
           <p className="text-xs text-roca-300">Midiendo el terreno…</p>

@@ -40,6 +40,7 @@ import { FichaRuta } from "./FichaRuta";
 import { Planificador } from "./Planificador";
 import { medirLinea, type MetricasLinea } from "@/lib/elevacion";
 import { enrutarSegmento, type SegmentoRuta } from "@/lib/enrutador";
+import { construirGpx, descargarGpx, leerGpx } from "@/lib/gpx";
 import {
   borrarPlan,
   guardarPlan,
@@ -780,6 +781,60 @@ export default function MapView() {
     });
   }
 
+  // Exporta el borrador actual a GPX (trazado completo + salida/llegada)
+  function descargarBorrador() {
+    if (trazadoPlan.length < 2) return;
+    const gpx = construirGpx({
+      nombre: "Ruta propia",
+      coords: trazadoPlan,
+      perfil: metricasPlan?.perfil,
+      puntos: nodosPlan.map((coord, i) => ({
+        coord,
+        nombre:
+          i === 0
+            ? "Salida"
+            : i === nodosPlan.length - 1
+              ? "Llegada"
+              : `Punto ${i + 1}`,
+      })),
+    });
+    descargarGpx("ruta-propia", gpx);
+  }
+
+  // Importa un GPX al planificador: la traza completa se conserva como el
+  // segmento entre salida y llegada (se siembra la caché), así que solo hay dos
+  // puntos editables pero el trazado queda idéntico al archivo.
+  function importarGpx(archivo: File) {
+    const lector = new FileReader();
+    lector.onload = () => {
+      const imp = leerGpx(String(lector.result));
+      if (!imp || imp.coords.length < 2) return;
+      const a = imp.coords[0];
+      const b = imp.coords[imp.coords.length - 1];
+      cacheSegmentos.current.set(claveSegmento(false, a, b), {
+        coords: imp.coords,
+        porSenderos: false,
+        inicio: a,
+        fin: b,
+      });
+      setModoSenderos(false);
+      setPlanVisible(null);
+      setWaypoints([crearWaypoint(a), crearWaypoint(b)]);
+      let [oeste, sur, este, norte] = [Infinity, Infinity, -Infinity, -Infinity];
+      for (const [lng, lat] of imp.coords) {
+        oeste = Math.min(oeste, lng);
+        este = Math.max(este, lng);
+        sur = Math.min(sur, lat);
+        norte = Math.max(norte, lat);
+      }
+      mapaRef.current?.fitBounds([oeste, sur, este, norte], {
+        padding: { top: 90, right: 90, bottom: 60, left: 400 },
+        duration: 900,
+      });
+    };
+    lector.readAsText(archivo);
+  }
+
   async function guardarBorrador(nombre: string) {
     if (!metricasPlan || trazadoPlan.length < 2) return;
     setGuardandoPlan(true);
@@ -1126,6 +1181,10 @@ export default function MapView() {
           onLimpiar={limpiarBorrador}
           onEliminar={eliminarWaypoint}
           onMover={moverWaypoint}
+          onImportarGpx={importarGpx}
+          onDescargarBorrador={
+            trazadoPlan.length >= 2 ? descargarBorrador : null
+          }
           onGuardar={guardarBorrador}
           guardando={guardandoPlan}
           firebaseListo={isFirebaseConfigured}

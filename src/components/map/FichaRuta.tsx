@@ -8,7 +8,8 @@ import {
 } from "@/lib/metricas-ruta";
 import type { Realizado } from "@/lib/realizados";
 import { COLOR_RED, ETIQUETA_RED } from "./rutas";
-import { IconoCerrar, IconoInvertir } from "@/components/icons";
+import { IconoCerrar, IconoDescargar, IconoInvertir } from "@/components/icons";
+import { descargarGpx, rutaCatalogoAGpx } from "@/lib/gpx";
 import type { User } from "firebase/auth";
 import { BotonCompartir } from "./BotonCompartir";
 import { MarcarRealizado } from "./MarcarRealizado";
@@ -162,6 +163,22 @@ export function FichaRuta({
         </div>
         <div className="mt-1">
           <PerfilElevacion perfil={ruta.perfil} onPunto={onCursorPerfil} />
+        </div>
+
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={() =>
+              descargarGpx(
+                ruta.ref ?? ruta.nombre,
+                rutaCatalogoAGpx(ruta),
+              )
+            }
+            className="flex items-center gap-1.5 rounded-full border border-roca-700 px-2.5 py-1 text-[11px] text-hielo-300 transition-colors hover:text-nieve"
+          >
+            <IconoDescargar width={13} height={13} />
+            Descargar GPX
+          </button>
         </div>
 
         {medio && (

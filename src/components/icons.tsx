@@ -306,6 +306,26 @@ export function IconoMeteo({
   }
 }
 
+/** Descargar: flecha hacia una bandeja. */
+export function IconoDescargar(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <path d="M12 4v10M8 10.5l4 4 4-4" />
+      <path d="M5 18.5h14" />
+    </Base>
+  );
+}
+
+/** Importar: flecha saliendo de una bandeja hacia arriba. */
+export function IconoImportar(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <path d="M12 15V5M8 8.5l4-4 4 4" />
+      <path d="M5 18.5h14" />
+    </Base>
+  );
+}
+
 /** Compartir: tres nodos conectados. */
 export function IconoCompartir(props: SVGProps<SVGSVGElement>) {
   return (
