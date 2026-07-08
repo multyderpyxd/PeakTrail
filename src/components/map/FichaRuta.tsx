@@ -10,6 +10,7 @@ import type { Realizado } from "@/lib/realizados";
 import { COLOR_RED, ETIQUETA_RED } from "./rutas";
 import { IconoCerrar, IconoInvertir } from "@/components/icons";
 import type { User } from "firebase/auth";
+import { BotonCompartir } from "./BotonCompartir";
 import { MarcarRealizado } from "./MarcarRealizado";
 import { Meteo } from "./Meteo";
 import { PerfilElevacion } from "./PerfilElevacion";
@@ -80,14 +81,17 @@ export function FichaRuta({
         <h2 className="min-w-0 flex-1 font-display text-lg leading-tight text-nieve">
           {ruta.nombre}
         </h2>
-        <button
-          type="button"
-          aria-label="Cerrar ficha"
-          onClick={onCerrar}
-          className="-m-1 p-1 text-hielo-300 transition-colors hover:text-nieve"
-        >
-          <IconoCerrar width={18} height={18} />
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <BotonCompartir query={`ruta=${ruta.id}`} />
+          <button
+            type="button"
+            aria-label="Cerrar ficha"
+            onClick={onCerrar}
+            className="-m-1 p-1 text-hielo-300 transition-colors hover:text-nieve"
+          >
+            <IconoCerrar width={18} height={18} />
+          </button>
+        </div>
       </header>
 
       <div className="p-4">

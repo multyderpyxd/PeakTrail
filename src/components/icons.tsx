@@ -306,6 +306,18 @@ export function IconoMeteo({
   }
 }
 
+/** Compartir: tres nodos conectados. */
+export function IconoCompartir(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <circle cx="6" cy="12" r="2.4" />
+      <circle cx="17.5" cy="6" r="2.4" />
+      <circle cx="17.5" cy="18" r="2.4" />
+      <path d="M8.1 10.9 15.4 7.1M8.1 13.1l7.3 3.8" />
+    </Base>
+  );
+}
+
 /** Viento: dos rachas curvas. */
 export function IconoViento(props: SVGProps<SVGSVGElement>) {
   return (

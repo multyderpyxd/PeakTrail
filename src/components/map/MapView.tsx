@@ -849,6 +849,42 @@ export default function MapView() {
     );
   }, [toponimos, cargado]);
 
+  // Enlaces directos: la URL refleja la ficha abierta (?el=… / ?ruta=…). Al
+  // cargar se abre la que venga en la URL; después la URL sigue a la selección
+  const deepLinkAplicado = useRef(false);
+  useEffect(() => {
+    if (!cargado) return;
+    if (!deepLinkAplicado.current) {
+      deepLinkAplicado.current = true;
+      const params = new URLSearchParams(window.location.search);
+      const elId = params.get("el");
+      const rutaId = params.get("ruta");
+      const elemento = elId ? elementosPorId.get(elId) : undefined;
+      const ruta = rutaId ? rutasRef.current?.get(rutaId) : undefined;
+      if (elemento) {
+        irAResultado({ clase: "elemento", elemento });
+        return;
+      }
+      if (ruta) {
+        irAResultado({ clase: "ruta", ruta });
+        return;
+      }
+    }
+    const params = new URLSearchParams(window.location.search);
+    params.delete("el");
+    params.delete("ruta");
+    if (seleccion?.clase === "elemento") params.set("el", seleccion.elemento.id);
+    else if (seleccion?.clase === "ruta") params.set("ruta", seleccion.ruta.id);
+    const qs = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      qs ? `?${qs}` : window.location.pathname,
+    );
+    // irAResultado es estable en la práctica; evitamos re-ejecutar por su identidad
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cargado, seleccion]);
+
   return (
     <main className="relative h-dvh w-full overflow-hidden">
       {/* MapLibre impone position:relative al contenedor, así que la altura

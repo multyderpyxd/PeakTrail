@@ -19,6 +19,56 @@ function normalizar(texto: string): string {
 
 const MAX_RESULTADOS = 8;
 
+/** Distancia de edici\u00f3n (Levenshtein) con corte: para en cuanto supera `max`. */
+function distancia(a: string, b: string, max: number): number {
+  const m = a.length;
+  const n = b.length;
+  if (Math.abs(m - n) > max) return max + 1;
+  let previa = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    const fila = [i];
+    let mejor = i;
+    for (let j = 1; j <= n; j++) {
+      const coste = a[i - 1] === b[j - 1] ? 0 : 1;
+      fila[j] = Math.min(previa[j] + 1, fila[j - 1] + 1, previa[j - 1] + coste);
+      if (fila[j] < mejor) mejor = fila[j];
+    }
+    if (mejor > max) return max + 1;
+    previa = fila;
+  }
+  return previa[n];
+}
+
+/**
+ * Punt\u00faa una entrada frente a la consulta: prioriza el prefijo del nombre,
+ * luego el prefijo de cualquier palabra, luego \u00abcontiene\u00bb, y por \u00faltimo
+ * tolera erratas por distancia de edici\u00f3n contra el arranque de cada palabra.
+ * Devuelve -1 si no hay coincidencia razonable.
+ */
+function puntuar(clave: string, palabras: string[], q: string): number {
+  if (clave.startsWith(q)) return 100;
+  if (palabras.some((p) => p.startsWith(q))) return 80;
+  const dentro = clave.indexOf(q);
+  if (dentro >= 0) return 60 - Math.min(dentro, 20) * 0.5;
+  // Tolerancia a erratas solo con consultas de cierta longitud
+  const maxDist = q.length >= 5 ? 2 : q.length >= 3 ? 1 : 0;
+  if (maxDist === 0) return -1;
+  let mejor = maxDist + 1;
+  for (const p of palabras) {
+    const prefijo = p.slice(0, Math.min(p.length, q.length + 1));
+    const d = Math.min(
+      distancia(q, prefijo, maxDist),
+      distancia(q, p, maxDist),
+    );
+    if (d < mejor) mejor = d;
+  }
+  return mejor <= maxDist ? 40 - mejor * 8 : -1;
+}
+
+function palabrasDe(clave: string): string[] {
+  return clave.split(/[^a-z0-9]+/).filter(Boolean);
+}
+
 /** Búsqueda por nombre sobre el catálogo y las rutas, con lista desplegable. */
 export function Buscador({
   rutas,
@@ -32,16 +82,27 @@ export function Buscador({
   const contenedorRef = useRef<HTMLDivElement>(null);
 
   const indice = useMemo(() => {
-    const entradas: { clave: string; resultado: ResultadoBusqueda }[] = [];
+    const entradas: {
+      clave: string;
+      palabras: string[];
+      nombre: string;
+      resultado: ResultadoBusqueda;
+    }[] = [];
     for (const elemento of elementosPorId.values()) {
+      const clave = normalizar(elemento.nombre);
       entradas.push({
-        clave: normalizar(elemento.nombre),
+        clave,
+        palabras: palabrasDe(clave),
+        nombre: elemento.nombre,
         resultado: { clase: "elemento", elemento },
       });
     }
     for (const ruta of rutas?.values() ?? []) {
+      const clave = normalizar(`${ruta.ref ?? ""} ${ruta.nombre}`);
       entradas.push({
-        clave: normalizar(`${ruta.ref ?? ""} ${ruta.nombre}`),
+        clave,
+        palabras: palabrasDe(clave),
+        nombre: ruta.nombre,
         resultado: { clase: "ruta", ruta },
       });
     }
@@ -51,10 +112,17 @@ export function Buscador({
   const resultados = useMemo(() => {
     const buscada = normalizar(consulta.trim());
     if (buscada.length < 2) return [];
-    return indice
-      .filter((e) => e.clave.includes(buscada))
-      .slice(0, MAX_RESULTADOS)
-      .map((e) => e.resultado);
+    const puntuados: { puntos: number; nombre: string; resultado: ResultadoBusqueda }[] =
+      [];
+    for (const e of indice) {
+      const puntos = puntuar(e.clave, e.palabras, buscada);
+      if (puntos >= 0) puntuados.push({ puntos, nombre: e.nombre, resultado: e.resultado });
+    }
+    // Mayor puntuación primero; a igualdad, el nombre más corto (más ajustado)
+    puntuados.sort(
+      (a, b) => b.puntos - a.puntos || a.nombre.length - b.nombre.length,
+    );
+    return puntuados.slice(0, MAX_RESULTADOS).map((p) => p.resultado);
   }, [consulta, indice]);
 
   function elegir(resultado: ResultadoBusqueda) {

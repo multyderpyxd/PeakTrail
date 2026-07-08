@@ -1,6 +1,7 @@
 import type { ElementoGeografico, TipoElemento } from "@/types/catalogo";
 import type { Realizado } from "@/lib/realizados";
 import type { User } from "firebase/auth";
+import { BotonCompartir } from "./BotonCompartir";
 import { COLOR_TIPO } from "./marcadores";
 import { MarcarRealizado } from "./MarcarRealizado";
 import { Meteo } from "./Meteo";
@@ -82,14 +83,17 @@ export function FichaElemento({
             {elemento.nombre}
           </h2>
         </div>
-        <button
-          type="button"
-          aria-label="Cerrar ficha"
-          onClick={onCerrar}
-          className="-m-1 p-1 text-hielo-300 transition-colors hover:text-nieve"
-        >
-          <IconoCerrar width={18} height={18} />
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <BotonCompartir query={`el=${elemento.id}`} />
+          <button
+            type="button"
+            aria-label="Cerrar ficha"
+            onClick={onCerrar}
+            className="-m-1 p-1 text-hielo-300 transition-colors hover:text-nieve"
+          >
+            <IconoCerrar width={18} height={18} />
+          </button>
+        </div>
       </header>
 
       <div className="space-y-3 p-4">
