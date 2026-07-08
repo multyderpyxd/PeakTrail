@@ -19,14 +19,18 @@ const ATRIBUCION_OSM =
 const ATRIBUCION_TERRENO =
   "Elevación: Mapzen/AWS Open Data (SRTM, EU-DEM)";
 
-/** Ortofoto PNOA de máxima actualidad, WMTS del IGN en rejilla web mercator. */
-const TESELAS_PNOA =
+/**
+ * Ortofoto PNOA de máxima actualidad, WMTS del IGN en rejilla web mercator.
+ * Exportada (junto con las otras dos plantillas) para que src/lib/teselas.ts
+ * pueda calcular las mismas URLs al preparar una descarga para sin cobertura.
+ */
+export const TESELAS_PNOA =
   "https://www.ign.es/wmts/pnoa-ma?request=GetTile&service=WMTS&version=1.0.0" +
   "&layer=OI.OrthoimageCoverage&style=default&format=image/jpeg" +
   "&tilematrixset=GoogleMapsCompatible&tilematrix={z}&tilerow={y}&tilecol={x}";
 
 /** Capa de rotulación del IGN pensada para superponerse a ortofoto. */
-const TESELAS_TOPONIMOS =
+export const TESELAS_TOPONIMOS =
   "https://www.ign.es/wmts/ign-base?request=GetTile&service=WMTS&version=1.0.0" +
   "&layer=IGNBaseOrto&style=default&format=image/png" +
   "&tilematrixset=GoogleMapsCompatible&tilematrix={z}&tilerow={y}&tilecol={x}";
@@ -37,7 +41,7 @@ const TESELAS_TOPONIMOS =
  * MapLibre; cuando montemos nuestra propia tubería MDT05 → terrain-RGB,
  * bastará con cambiar esta URL y la codificación.
  */
-const TESELAS_ELEVACION =
+export const TESELAS_ELEVACION =
   "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
 
 export const CAPA_TOPONIMOS = "toponimos";

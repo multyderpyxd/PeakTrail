@@ -338,6 +338,18 @@ export function IconoDescargar(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Descargar para sin cobertura: teselas de mapa + flecha, distinto de IconoDescargar (GPX). */
+export function IconoDescargaOffline(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1.2" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1.2" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1.2" />
+      <path d="M17 12.5v7M14 17l3 2.5 3-2.5" />
+    </Base>
+  );
+}
+
 /** Importar: flecha saliendo de una bandeja hacia arriba. */
 export function IconoImportar(props: SVGProps<SVGSVGElement>) {
   return (

@@ -156,6 +156,32 @@ correcta; esto es margen de mejora.
   julio de 2026 dejarlo para después de la fase 2; sondear recuentos en
   Overpass y decidir qué tipos compensan cuando toque.
 
+## PWA y descargas offline (Hito 9)
+
+- **Selección de área libre**: hoy solo se puede descargar el corredor de
+  una ruta del catálogo, un plan propio o una actividad de Strava (botón en
+  su ficha). Dibujar un rectángulo/polígono a mano sobre el mapa para
+  descargar una zona sin ruta asociada (p. ej. el entorno de un refugio)
+  quedaría bien como ampliación, con la misma `src/lib/descargas.ts`.
+- **Actualizar un pack**: las teselas descargadas no se revalidan nunca
+  (deliberado, para no gastar datos en el monte); si la ortofoto del IGN
+  cambia con el tiempo, no hay forma de refrescar un pack salvo borrarlo y
+  volver a descargarlo. Un botón «Actualizar» en `PanelDescargas.tsx` sería
+  sencillo de añadir.
+- **Poda de la caché oportunista**: `peaktrail-teselas` (las vistas de
+  pasada, no las de un pack) no tiene hoy ninguna poda automática por cuota;
+  el diseño original contemplaba una función `podarCacheOportunista()` por
+  LRU aproximado (orden de inserción de `cache.keys()`) que no se llegó a
+  disparar desde ningún sitio de la UI. Con ~10 usuarios navegando el mapa
+  no debería crecer mucho, pero conviene vigilarlo si se nota la cuota del
+  dispositivo apretada.
+- **Descargas compartidas del grupo**: cada pack vive en el dispositivo que
+  lo descargó (localStorage + Cache Storage, sin Firestore). Si el grupo
+  quiere coordinarse antes de una salida («ya lo tengo descargado, coge tú
+  la zona de al lado»), habría que decidir si compensa un registro
+  compartido de qué se ha descargado, o si con el aviso verbal del grupo
+  basta.
+
 ## Búsqueda y UX (Hito 10)
 
 - **Priorizar coincidencias por prefijo** en el buscador (hoy es

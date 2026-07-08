@@ -11,6 +11,7 @@
     "rutas:generar": "node scripts/generar-rutas.mjs",
     "catalogo:importar": "node --env-file=.env.local scripts/importar-firestore.mjs",
     "invitados:anadir": "node --env-file=.env.local scripts/invitar.mjs",
+    "iconos:generar": "node scripts/generar-iconos.mjs",
     "test": "vitest run",
     "test:red": "PROBAR_RED=1 vitest run"
   },
@@ -33,6 +34,7 @@
     "eslint-config-next": "^15.3.4",
     "geotiff": "^3.0.5",
     "pngjs": "^7.0.0",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.1.11",
     "typescript": "^5.8.3",
     "vitest": "^4.1.10"

@@ -14,6 +14,7 @@ import { Buscador, type ResultadoBusqueda } from "./Buscador";
 import { PanelCapas } from "./PanelCapas";
 import {
   IconoBrujula,
+  IconoDescargaOffline,
   IconoLista,
   IconoMas,
   IconoMenos,
@@ -69,6 +70,7 @@ import {
 import { Explorador } from "./Explorador";
 import { FichaActividad } from "./FichaActividad";
 import { Progreso } from "./Progreso";
+import { PanelDescargas } from "./PanelDescargas";
 import {
   COLOR_ACTIVIDAD,
   coleccionActividades,
@@ -78,6 +80,7 @@ import { decodificarPolilinea } from "@/lib/emparejar";
 import type { ActividadStrava } from "@/lib/strava";
 import { procesarRetornoStrava } from "@/lib/strava";
 import { guardarPreferencias, leerPreferencias } from "@/lib/preferencias";
+import { useConexion } from "@/lib/conexion";
 
 const CAPA_ELEMENTOS = "elementos";
 const CAPA_RUTAS = "rutas";
@@ -229,6 +232,8 @@ export default function MapView() {
   );
   const [verProgreso, setVerProgreso] = useState(false);
   const [verExplorador, setVerExplorador] = useState(false);
+  const [verDescargas, setVerDescargas] = useState(false);
+  const enLinea = useConexion();
 
   useEffect(() => {
     if (!sesion.invitado) {
@@ -604,6 +609,7 @@ export default function MapView() {
       }
       setVerProgreso(false);
       setVerExplorador(false);
+      setVerDescargas(false);
       if (pulsado.layer.id === CAPA_ELEMENTOS) {
         const elemento = elementosPorId.get(String(pulsado.properties.id));
         if (!elemento) return;
@@ -918,6 +924,7 @@ export default function MapView() {
       setSeleccion(null);
       setVerProgreso(false);
       setVerExplorador(false);
+      setVerDescargas(false);
       if (isFirebaseConfigured && planes === null) {
         listarPlanes()
           .then(setPlanes)
@@ -1101,6 +1108,7 @@ export default function MapView() {
   function verActividad(actividad: ActividadStrava) {
     setVerExplorador(false);
     setVerProgreso(false);
+    setVerDescargas(false);
     if (modoPlan) alternarPlanificador();
     setSentidoInvertido(false);
     setMostrarActividades(true);
@@ -1211,6 +1219,7 @@ export default function MapView() {
     const mapa = mapaRef.current;
     setVerProgreso(false);
     setVerExplorador(false);
+    setVerDescargas(false);
     if (modoPlan) alternarPlanificador();
     setSentidoInvertido(false);
     if (resultado.clase === "elemento") {
@@ -1309,6 +1318,11 @@ export default function MapView() {
             Pirineo
           </p>
         </div>
+        {!enLinea && (
+          <span className="rounded-full border border-roca-700 px-2.5 py-1 text-[11px] text-roca-300">
+            Sin conexión
+          </span>
+        )}
         {isFirebaseConfigured && !sesion.cargando && (
           <div className="ml-2 flex items-center gap-2 border-l border-roca-800 pl-3">
             {sesion.usuario ? (
@@ -1438,6 +1452,11 @@ export default function MapView() {
         />
       )}
 
+      {/* Panel de descargas para sin cobertura */}
+      {verDescargas && (
+        <PanelDescargas onCerrar={() => setVerDescargas(false)} />
+      )}
+
       {/* Ficha de la selección */}
       {!modoPlan && seleccion?.clase === "elemento" && (
         <FichaElemento
@@ -1540,6 +1559,7 @@ export default function MapView() {
               if (abrir) {
                 setSeleccion(null);
                 setVerExplorador(false);
+                setVerDescargas(false);
                 if (modoPlan) alternarPlanificador();
               }
             }}
@@ -1557,11 +1577,28 @@ export default function MapView() {
               if (abrir) {
                 setSeleccion(null);
                 setVerProgreso(false);
+                setVerDescargas(false);
                 if (modoPlan) alternarPlanificador();
               }
             }}
           >
             <IconoLista />
+          </BotonMapa>
+          <BotonMapa
+            etiqueta={verDescargas ? "Cerrar descargas" : "Descargas para sin cobertura"}
+            activo={verDescargas}
+            onClick={() => {
+              const abrir = !verDescargas;
+              setVerDescargas(abrir);
+              if (abrir) {
+                setSeleccion(null);
+                setVerProgreso(false);
+                setVerExplorador(false);
+                if (modoPlan) alternarPlanificador();
+              }
+            }}
+          >
+            <IconoDescargaOffline />
           </BotonMapa>
         </div>
       </div>

@@ -1,6 +1,11 @@
 import { getApps, initializeApp, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  type Firestore,
+} from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -28,6 +33,22 @@ export function getFirebaseAuth(): Auth {
   return getAuth(getFirebaseApp());
 }
 
+let dbSingleton: Firestore | null = null;
+
+/**
+ * initializeFirestore solo puede llamarse una vez por FirebaseApp: se
+ * memoiza aquí (en vez de llamarlo fresco en cada uso, como antes con
+ * getFirestore) para activar persistencia offline. Con esto, los onSnapshot
+ * de realizados.ts/social.ts sirven el último snapshot en caché sin red y
+ * las escrituras (setDoc/addDoc/deleteDoc) quedan en cola local hasta
+ * reconectar, sin tocar esos ficheros.
+ */
 export function getDb(): Firestore {
-  return getFirestore(getFirebaseApp());
+  if (dbSingleton) return dbSingleton;
+  dbSingleton = initializeFirestore(getFirebaseApp(), {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager(),
+    }),
+  });
+  return dbSingleton;
 }

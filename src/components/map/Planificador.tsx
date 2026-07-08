@@ -12,6 +12,8 @@ import {
   IconoPapelera,
 } from "@/components/icons";
 import { PerfilElevacion } from "./PerfilElevacion";
+import { BotonDescargaOffline } from "./BotonDescargaOffline";
+import { useConexion } from "@/lib/conexion";
 
 function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
   return (
@@ -176,6 +178,7 @@ export function Planificador({
   const [nombre, setNombre] = useState("");
   const inputGpx = useRef<HTMLInputElement>(null);
   const numPuntos = waypoints.length;
+  const enLinea = useConexion();
   const mostrada = planVisible
     ? {
         distanciaKm: planVisible.distanciaKm,
@@ -249,6 +252,12 @@ export function Planificador({
                 ))}
               </div>
             </div>
+            {!enLinea && modoSenderos && numPuntos > 0 && (
+              <p className="text-[11px] text-roca-400">
+                Sin conexión: los tramos se trazan en línea recta hasta que
+                vuelva la cobertura.
+              </p>
+            )}
 
             <div className="flex flex-wrap gap-2">
               <input
@@ -332,14 +341,22 @@ export function Planificador({
           </>
         )}
         {planVisible && (
-          <BotonSecundario
-            onClick={() =>
-              descargarGpx(planVisible.nombre, planAGpx(planVisible))
-            }
-          >
-            <IconoDescargar width={13} height={13} />
-            Descargar GPX
-          </BotonSecundario>
+          <div className="flex flex-wrap gap-2">
+            <BotonSecundario
+              onClick={() =>
+                descargarGpx(planVisible.nombre, planAGpx(planVisible))
+              }
+            >
+              <IconoDescargar width={13} height={13} />
+              Descargar GPX
+            </BotonSecundario>
+            <BotonDescargaOffline
+              id={`plan:${planVisible.id}`}
+              nombre={planVisible.nombre}
+              tipo="plan"
+              linea={planVisible.linea}
+            />
+          </div>
         )}
         {midiendo && !planVisible && (
           <p className="text-xs text-roca-300">Midiendo el terreno…</p>

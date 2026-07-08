@@ -5,6 +5,7 @@ import {
   type DiaMeteo,
 } from "@/lib/meteo";
 import { IconoMeteo, IconoViento } from "@/components/icons";
+import { useConexion } from "@/lib/conexion";
 
 function diaSemana(fecha: string, indice: number): string {
   if (indice === 0) return "Hoy";
@@ -29,8 +30,10 @@ export function Meteo({
   const [dias, setDias] = useState<DiaMeteo[] | null>(null);
   const [error, setError] = useState(false);
   const [sel, setSel] = useState(0);
+  const enLinea = useConexion();
 
   useEffect(() => {
+    if (!enLinea) return;
     let cancelado = false;
     setDias(null);
     setError(false);
@@ -45,8 +48,15 @@ export function Meteo({
     return () => {
       cancelado = true;
     };
-  }, [lat, lng, altitud]);
+  }, [lat, lng, altitud, enLinea]);
 
+  if (!enLinea) {
+    return (
+      <p className="text-xs text-roca-300">
+        Sin conexión: la previsión necesita cobertura.
+      </p>
+    );
+  }
   if (error) {
     return (
       <p className="text-xs text-roca-300">No se pudo cargar la previsión.</p>

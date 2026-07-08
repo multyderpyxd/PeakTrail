@@ -12,6 +12,7 @@ import { IconoCerrar, IconoDescargar, IconoInvertir } from "@/components/icons";
 import { descargarGpx, rutaCatalogoAGpx } from "@/lib/gpx";
 import type { User } from "firebase/auth";
 import { BotonCompartir } from "./BotonCompartir";
+import { BotonDescargaOffline } from "./BotonDescargaOffline";
 import { MarcarRealizado } from "./MarcarRealizado";
 import { Meteo } from "./Meteo";
 import { PerfilElevacion } from "./PerfilElevacion";
@@ -165,7 +166,7 @@ export function FichaRuta({
           <PerfilElevacion perfil={ruta.perfil} onPunto={onCursorPerfil} />
         </div>
 
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() =>
@@ -179,6 +180,12 @@ export function FichaRuta({
             <IconoDescargar width={13} height={13} />
             Descargar GPX
           </button>
+          <BotonDescargaOffline
+            id={`ruta:${ruta.id}`}
+            nombre={ruta.ref ?? ruta.nombre}
+            tipo="ruta"
+            linea={ruta.partes.flat()}
+          />
         </div>
 
         {medio && (

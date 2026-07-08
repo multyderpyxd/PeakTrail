@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Archivo, Fraunces } from "next/font/google";
+import { RegistrarSW } from "@/components/RegistrarSW";
 import "./globals.css";
 
 const archivo = Archivo({
@@ -19,6 +20,12 @@ export const metadata: Metadata = {
     "Mapa 2.5D, rutas, picos, collados e ibones del Pirineo para nuestro grupo de montaña.",
 };
 
+export const viewport: Viewport = {
+  themeColor: "#16130f",
+  width: "device-width",
+  initialScale: 1,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -26,7 +33,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className={`${archivo.variable} ${fraunces.variable}`}>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <RegistrarSW />
+        {children}
+      </body>
     </html>
   );
 }

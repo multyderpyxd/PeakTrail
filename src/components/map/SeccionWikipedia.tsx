@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { resumenWikidata, type ResumenWiki } from "@/lib/wikipedia";
+import { useConexion } from "@/lib/conexion";
 
 const ETIQUETA_IDIOMA: Record<string, string> = {
   ca: "catalán",
@@ -19,9 +20,10 @@ export function SeccionWikipedia({ wikidata }: { wikidata?: string }) {
   const [resumen, setResumen] = useState<ResumenWiki | null | undefined>(
     undefined,
   );
+  const enLinea = useConexion();
 
   useEffect(() => {
-    if (!wikidata) {
+    if (!wikidata || !enLinea) {
       setResumen(null);
       return;
     }
@@ -37,7 +39,7 @@ export function SeccionWikipedia({ wikidata }: { wikidata?: string }) {
     return () => {
       cancelado = true;
     };
-  }, [wikidata]);
+  }, [wikidata, enLinea]);
 
   if (!wikidata || resumen === null) return null;
   if (resumen === undefined) {

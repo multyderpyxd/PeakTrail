@@ -18,6 +18,7 @@ import {
 import { elementosPorId } from "./elementos";
 import type { Ruta } from "@/types/rutas";
 import { IconoActividad } from "@/components/icons";
+import { useConexion } from "@/lib/conexion";
 
 /**
  * Conexión e importación de Strava dentro del panel de progreso. La
@@ -40,6 +41,7 @@ export function SeccionStrava({
   const [conexion, setConexion] = useState(conexionStrava);
   const [estado, setEstado] = useState<string | null>(null);
   const [importando, setImportando] = useState(false);
+  const enLinea = useConexion();
 
   if (!stravaConfigurado) return null;
 
@@ -155,13 +157,20 @@ export function SeccionStrava({
           </div>
           <button
             type="button"
-            disabled={importando || !rutas}
+            disabled={importando || !rutas || !enLinea}
             onClick={importar}
             className="mt-2 w-full rounded bg-ocre-600 px-2.5 py-1.5 text-xs text-roca-950 transition-colors hover:bg-ocre-400 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {importando ? "Importando…" : "Importar actividades"}
           </button>
-          {estado && <p className="mt-2 text-xs text-roca-300">{estado}</p>}
+          {!enLinea && (
+            <p className="mt-2 text-xs text-roca-300">
+              Sin conexión: importar actividades necesita cobertura.
+            </p>
+          )}
+          {enLinea && estado && (
+            <p className="mt-2 text-xs text-roca-300">{estado}</p>
+          )}
         </>
       ) : (
         <>

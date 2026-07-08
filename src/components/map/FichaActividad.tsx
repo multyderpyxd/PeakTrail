@@ -10,6 +10,7 @@ import {
 } from "@/components/icons";
 import { PerfilElevacion } from "./PerfilElevacion";
 import { COLOR_ACTIVIDAD } from "./actividades-capa";
+import { BotonDescargaOffline } from "./BotonDescargaOffline";
 
 const ETIQUETA_DEPORTE: Record<string, string> = {
   Hike: "Senderismo",
@@ -180,6 +181,14 @@ export function FichaActividad({
               <IconoDescargar width={13} height={13} />
               Descargar GPX
             </button>
+          )}
+          {traza.length >= 2 && (
+            <BotonDescargaOffline
+              id={`actividad:${actividad.id}`}
+              nombre={actividad.nombre}
+              tipo="actividad"
+              linea={traza}
+            />
           )}
           <a
             href={`https://www.strava.com/activities/${actividad.id}`}
