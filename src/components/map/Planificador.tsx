@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { MetricasLinea } from "@/lib/elevacion";
 import { formatearHoras, tiempoEstimadoHoras } from "@/lib/metricas-ruta";
-import type { RutaPlaneada } from "@/types/plan";
+import type { RutaPlaneada, Waypoint } from "@/types/plan";
 import {
   IconoCerrar,
   IconoDeshacer,
@@ -41,8 +41,87 @@ function BotonSecundario({
   );
 }
 
+function Chevron({ arriba }: { arriba: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width={12}
+      height={12}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {arriba ? <path d="M4 10l4-4 4 4" /> : <path d="M4 6l4 4 4 4" />}
+    </svg>
+  );
+}
+
+/** Fila de un punto de la ruta: orden, etiqueta salida/llegada y controles. */
+function FilaPunto({
+  indice,
+  total,
+  onSubir,
+  onBajar,
+  onEliminar,
+}: {
+  indice: number;
+  total: number;
+  onSubir: () => void;
+  onBajar: () => void;
+  onEliminar: () => void;
+}) {
+  const esInicio = indice === 0;
+  const esFin = total > 1 && indice === total - 1;
+  const fondo = esInicio ? "#7ba488" : esFin ? "#c99655" : "#16130f";
+  const borde = esInicio ? "#7ba488" : "#c99655";
+  const color = esInicio || esFin ? "#16130f" : "#f6f4ee";
+  return (
+    <li className="flex items-center gap-2">
+      <span
+        aria-hidden="true"
+        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold"
+        style={{ background: fondo, border: `2px solid ${borde}`, color }}
+      >
+        {indice + 1}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-xs text-hielo-200">
+        {esInicio ? "Salida" : esFin ? "Llegada" : `Punto ${indice + 1}`}
+      </span>
+      <button
+        type="button"
+        aria-label={`Subir punto ${indice + 1}`}
+        onClick={onSubir}
+        disabled={esInicio}
+        className="p-0.5 text-roca-400 transition-colors hover:text-nieve disabled:opacity-25"
+      >
+        <Chevron arriba />
+      </button>
+      <button
+        type="button"
+        aria-label={`Bajar punto ${indice + 1}`}
+        onClick={onBajar}
+        disabled={indice === total - 1}
+        className="p-0.5 text-roca-400 transition-colors hover:text-nieve disabled:opacity-25"
+      >
+        <Chevron arriba={false} />
+      </button>
+      <button
+        type="button"
+        aria-label={`Quitar punto ${indice + 1}`}
+        onClick={onEliminar}
+        className="p-0.5 text-roca-400 transition-colors hover:text-nieve"
+      >
+        <IconoPapelera width={13} height={13} />
+      </button>
+    </li>
+  );
+}
+
 export function Planificador({
-  numPuntos,
+  waypoints,
   metricas,
   midiendo,
   enrutando,
@@ -50,6 +129,8 @@ export function Planificador({
   onModoSenderos,
   onDeshacer,
   onLimpiar,
+  onEliminar,
+  onMover,
   onGuardar,
   guardando,
   firebaseListo,
@@ -59,7 +140,7 @@ export function Planificador({
   onBorrarPlan,
   onCerrar,
 }: {
-  numPuntos: number;
+  waypoints: Waypoint[];
   metricas: MetricasLinea | null;
   midiendo: boolean;
   enrutando: boolean;
@@ -67,6 +148,8 @@ export function Planificador({
   onModoSenderos: (v: boolean) => void;
   onDeshacer: () => void;
   onLimpiar: () => void;
+  onEliminar: (id: string) => void;
+  onMover: (indice: number, direccion: -1 | 1) => void;
   onGuardar: (nombre: string) => void;
   guardando: boolean;
   firebaseListo: boolean;
@@ -77,6 +160,7 @@ export function Planificador({
   onCerrar: () => void;
 }) {
   const [nombre, setNombre] = useState("");
+  const numPuntos = waypoints.length;
   const mostrada = planVisible
     ? {
         distanciaKm: planVisible.distanciaKm,
@@ -152,16 +236,34 @@ export function Planificador({
             </div>
 
             {numPuntos > 0 && (
-              <div className="flex gap-2">
-                <BotonSecundario onClick={onDeshacer}>
-                  <IconoDeshacer width={13} height={13} />
-                  Deshacer
-                </BotonSecundario>
-                <BotonSecundario onClick={onLimpiar}>
-                  <IconoPapelera width={13} height={13} />
-                  Limpiar
-                </BotonSecundario>
-              </div>
+              <>
+                <ul className="space-y-1.5">
+                  {waypoints.map((wp, i) => (
+                    <FilaPunto
+                      key={wp.id}
+                      indice={i}
+                      total={numPuntos}
+                      onSubir={() => onMover(i, -1)}
+                      onBajar={() => onMover(i, 1)}
+                      onEliminar={() => onEliminar(wp.id)}
+                    />
+                  ))}
+                </ul>
+                <div className="flex gap-2">
+                  <BotonSecundario onClick={onDeshacer}>
+                    <IconoDeshacer width={13} height={13} />
+                    Deshacer
+                  </BotonSecundario>
+                  <BotonSecundario onClick={onLimpiar}>
+                    <IconoPapelera width={13} height={13} />
+                    Limpiar
+                  </BotonSecundario>
+                </div>
+                <p className="text-[11px] text-roca-400">
+                  Arrastra los puntos sobre el mapa para reubicarlos; usa las
+                  flechas para reordenarlos.
+                </p>
+              </>
             )}
           </>
         )}

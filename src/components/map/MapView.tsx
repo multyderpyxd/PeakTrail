@@ -39,14 +39,14 @@ import { FichaElemento } from "./FichaElemento";
 import { FichaRuta } from "./FichaRuta";
 import { Planificador } from "./Planificador";
 import { medirLinea, type MetricasLinea } from "@/lib/elevacion";
-import { segmentoAPie } from "@/lib/enrutador";
+import { enrutarSegmento, type SegmentoRuta } from "@/lib/enrutador";
 import {
   borrarPlan,
   guardarPlan,
   isFirebaseConfigured,
   listarPlanes,
 } from "@/lib/planes";
-import type { RutaPlaneada } from "@/types/plan";
+import type { RutaPlaneada, Waypoint } from "@/types/plan";
 import { entrar, salir, useUsuario } from "@/lib/auth";
 import {
   desmarcarRealizado,
@@ -78,6 +78,62 @@ const COLECCION_VACIA: GeoJSON.FeatureCollection = {
 type Seleccion =
   | { clase: "elemento"; elemento: ElementoGeografico }
   | { clase: "ruta"; ruta: Ruta };
+
+function crearWaypoint(lngLat: [number, number]): Waypoint {
+  const id =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `wp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return { id, lngLat };
+}
+
+/** Clave de caché de un segmento: modo + par de coordenadas redondeadas. */
+function claveSegmento(
+  porSenderos: boolean,
+  a: [number, number],
+  b: [number, number],
+): string {
+  const p = (c: [number, number]) => `${c[0].toFixed(6)},${c[1].toFixed(6)}`;
+  return `${porSenderos ? "s" : "r"}|${p(a)}|${p(b)}`;
+}
+
+/**
+ * Elemento DOM del marcador de un waypoint: insignia circular numerada con el
+ * orden. La salida (1) va en pino y la llegada (N) en ocre; los intermedios en
+ * oscuro con aro ocre. Estilos en línea con los hex de la paleta (los
+ * marcadores DOM no pasan por el JIT de Tailwind).
+ */
+function elementoWaypoint(indice: number, total: number): HTMLDivElement {
+  const esInicio = indice === 0;
+  const esFin = total > 1 && indice === total - 1;
+  const fondo = esInicio ? "#7ba488" : esFin ? "#c99655" : "#16130f";
+  const borde = esInicio ? "#7ba488" : "#c99655";
+  const color = esInicio || esFin ? "#16130f" : "#f6f4ee";
+  const el = document.createElement("div");
+  el.textContent = String(indice + 1);
+  el.setAttribute(
+    "aria-label",
+    esInicio ? "Salida" : esFin ? "Llegada" : `Punto ${indice + 1}`,
+  );
+  el.style.cssText = [
+    "width:22px",
+    "height:22px",
+    "border-radius:9999px",
+    "display:flex",
+    "align-items:center",
+    "justify-content:center",
+    "font-family:Archivo,system-ui,sans-serif",
+    "font-weight:600",
+    "font-size:11px",
+    "line-height:1",
+    `color:${color}`,
+    `background:${fondo}`,
+    `border:2px solid ${borde}`,
+    "box-shadow:0 1px 4px rgba(0,0,0,.55)",
+    "cursor:grab",
+  ].join(";");
+  return el;
+}
 
 const EXPRESION_COLOR_RED: maplibregl.ExpressionSpecification = [
   "match",
@@ -133,16 +189,17 @@ export default function MapView() {
   // Estado del planificador de rutas propias
   const [modoPlan, setModoPlan] = useState(false);
   const modoPlanRef = useRef(false);
-  const [puntosPlan, setPuntosPlan] = useState<[number, number][]>([]);
-  const [segmentosPlan, setSegmentosPlan] = useState<[number, number][][]>([]);
+  const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
+  const [segmentos, setSegmentos] = useState<SegmentoRuta[]>([]);
+  const cacheSegmentos = useRef(new Map<string, SegmentoRuta>());
   const [modoSenderos, setModoSenderos] = useState(true);
   const [enrutando, setEnrutando] = useState(false);
-  const enrutandoRef = useRef(false);
   const [metricasPlan, setMetricasPlan] = useState<MetricasLinea | null>(null);
   const [midiendo, setMidiendo] = useState(false);
   const [guardandoPlan, setGuardandoPlan] = useState(false);
   const [planes, setPlanes] = useState<RutaPlaneada[] | null>(null);
   const [planVisible, setPlanVisible] = useState<RutaPlaneada | null>(null);
+  const marcadoresPlan = useRef<maplibregl.Marker[]>([]);
 
   // Sesión, registro de realizados del grupo y panel de progreso
   const sesion = useUsuario();
@@ -384,7 +441,7 @@ export default function MapView() {
         type: "symbol",
         source: CAPA_PLAN_PUNTOS,
         layout: {
-          "icon-image": "plan-punto",
+          "icon-image": ["coalesce", ["get", "icon"], "plan-punto"],
           "icon-allow-overlap": true,
           "icon-ignore-placement": true,
         },
@@ -413,7 +470,10 @@ export default function MapView() {
       cancelarDestelloRef.current();
       if (modoPlanRef.current) {
         setPlanVisible(null);
-        setPuntosPlan((p) => [...p, [e.lngLat.lng, e.lngLat.lat]]);
+        setWaypoints((w) => [
+          ...w,
+          crearWaypoint([e.lngLat.lng, e.lngLat.lat]),
+        ]);
         return;
       }
       const capas = [CAPA_ELEMENTOS, CAPA_RUTAS_PULSABLE].filter((c) =>
@@ -517,42 +577,71 @@ export default function MapView() {
 
   // --- Planificador ---
 
-  // Calcula el segmento pendiente entre los dos últimos puntos marcados
+  // Recalcula los segmentos entre waypoints consecutivos. Los recalcula todos,
+  // pero cachea por (modo, par de puntos): al añadir, mover o reordenar solo se
+  // rehacen los segmentos afectados. Un token cancela los cálculos en vuelo.
   useEffect(() => {
-    // Si al deshacer sobran segmentos (p. ej. con un enrutado en vuelo),
-    // se recortan antes de calcular nada
-    const esperados = Math.max(0, puntosPlan.length - 1);
-    if (segmentosPlan.length > esperados) {
-      setSegmentosPlan((s) => s.slice(0, esperados));
+    if (waypoints.length < 2) {
+      setSegmentos([]);
+      setEnrutando(false);
       return;
     }
-    if (puntosPlan.length - 1 <= segmentosPlan.length || enrutandoRef.current)
-      return;
-    const a = puntosPlan[segmentosPlan.length];
-    const b = puntosPlan[segmentosPlan.length + 1];
-    enrutandoRef.current = true;
+    let cancelado = false;
     setEnrutando(true);
-    (modoSenderos
-      ? segmentoAPie(a, b)
-      : Promise.resolve({ coords: [a, b] as [number, number][] })
-    )
-      .then(({ coords }) => setSegmentosPlan((s) => [...s, coords]))
-      .finally(() => {
-        enrutandoRef.current = false;
+    (async () => {
+      const cache = cacheSegmentos.current;
+      const segs: SegmentoRuta[] = [];
+      for (let i = 0; i < waypoints.length - 1; i++) {
+        const a = waypoints[i].lngLat;
+        const b = waypoints[i + 1].lngLat;
+        const clave = claveSegmento(modoSenderos, a, b);
+        let seg = cache.get(clave);
+        if (!seg) {
+          seg = await enrutarSegmento(a, b, modoSenderos);
+          if (cancelado) return;
+          cache.set(clave, seg);
+        }
+        segs.push(seg);
+      }
+      if (!cancelado) {
+        setSegmentos(segs);
         setEnrutando(false);
-      });
-  }, [puntosPlan, segmentosPlan, modoSenderos]);
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [waypoints, modoSenderos]);
 
-  const lineaPlan = useMemo(() => {
-    const linea: [number, number][] = [];
-    for (const seg of segmentosPlan)
-      linea.push(...(linea.length ? seg.slice(1) : seg));
+  // Posición «de nodo» de cada waypoint: el enganche al sendero si algún
+  // segmento contiguo va por senderos, y si no el propio clic. Da continuidad
+  // al trazado, que pasa por estos nodos.
+  const nodosPlan = useMemo<[number, number][]>(
+    () =>
+      waypoints.map((wp, i) => {
+        const saliente = segmentos[i];
+        const entrante = segmentos[i - 1];
+        if (saliente?.porSenderos) return saliente.inicio;
+        if (entrante?.porSenderos) return entrante.fin;
+        return wp.lngLat;
+      }),
+    [waypoints, segmentos],
+  );
+
+  const trazadoPlan = useMemo<[number, number][]>(() => {
+    if (segmentos.length === 0 || nodosPlan.length < 2) return [];
+    const linea: [number, number][] = [nodosPlan[0]];
+    for (let i = 0; i < segmentos.length; i++) {
+      const cs = segmentos[i].coords;
+      for (let j = 1; j < cs.length - 1; j++) linea.push(cs[j]);
+      linea.push(nodosPlan[i + 1]);
+    }
     return linea;
-  }, [segmentosPlan]);
+  }, [segmentos, nodosPlan]);
 
   // Métricas del borrador (elevación muestreada), con un pequeño debounce
   useEffect(() => {
-    if (lineaPlan.length < 2) {
+    if (trazadoPlan.length < 2) {
       setMetricasPlan(null);
       return;
     }
@@ -560,7 +649,7 @@ export default function MapView() {
     setMidiendo(true);
     const temporizador = setTimeout(async () => {
       try {
-        const metricas = await medirLinea(lineaPlan);
+        const metricas = await medirLinea(trazadoPlan);
         if (!cancelado) setMetricasPlan(metricas);
       } catch {
         if (!cancelado) setMetricasPlan(null);
@@ -572,14 +661,14 @@ export default function MapView() {
       cancelado = true;
       clearTimeout(temporizador);
     };
-  }, [lineaPlan]);
+  }, [trazadoPlan]);
 
-  // Pinta borrador o plan guardado seleccionado
+  // Pinta la línea (borrador o plan guardado). El plan guardado muestra además
+  // sus puntos con salida/llegada; el borrador usa marcadores DOM arrastrables.
   useEffect(() => {
     const mapa = mapaRef.current;
     if (!mapa || !cargado) return;
-    const linea = planVisible ? planVisible.linea : lineaPlan;
-    const puntos = planVisible ? planVisible.puntos : puntosPlan;
+    const linea = planVisible ? planVisible.linea : trazadoPlan;
     (mapa.getSource(CAPA_PLAN_LINEA) as maplibregl.GeoJSONSource).setData(
       linea.length > 1
         ? {
@@ -589,15 +678,59 @@ export default function MapView() {
           }
         : COLECCION_VACIA,
     );
+    const puntos = planVisible?.puntos ?? [];
     (mapa.getSource(CAPA_PLAN_PUNTOS) as maplibregl.GeoJSONSource).setData({
       type: "FeatureCollection",
-      features: puntos.map((coord) => ({
+      features: puntos.map((coord, i) => ({
         type: "Feature",
         geometry: { type: "Point", coordinates: coord },
-        properties: {},
+        properties: {
+          icon:
+            i === 0
+              ? "ruta-inicio"
+              : i === puntos.length - 1
+                ? "ruta-fin"
+                : undefined,
+        },
       })),
     });
-  }, [lineaPlan, puntosPlan, planVisible, cargado]);
+  }, [trazadoPlan, planVisible, cargado]);
+
+  // Marcadores DOM del borrador: numerados, arrastrables, con salida y llegada
+  // distinguidas por color. Se reconstruyen al cambiar los waypoints.
+  useEffect(() => {
+    const mapa = mapaRef.current;
+    if (!mapa || !cargado) return;
+    for (const m of marcadoresPlan.current) m.remove();
+    marcadoresPlan.current = [];
+    if (!modoPlan || planVisible) return;
+    const total = waypoints.length;
+    waypoints.forEach((wp, i) => {
+      const el = elementoWaypoint(i, total);
+      const marcador = new maplibregl.Marker({
+        element: el,
+        draggable: true,
+        anchor: "center",
+      })
+        .setLngLat(wp.lngLat)
+        .addTo(mapa);
+      marcador.on("dragstart", () => {
+        el.style.cursor = "grabbing";
+      });
+      marcador.on("dragend", () => {
+        el.style.cursor = "grab";
+        const { lng, lat } = marcador.getLngLat();
+        setWaypoints((w) =>
+          w.map((x) => (x.id === wp.id ? { ...x, lngLat: [lng, lat] } : x)),
+        );
+      });
+      marcadoresPlan.current.push(marcador);
+    });
+    return () => {
+      for (const m of marcadoresPlan.current) m.remove();
+      marcadoresPlan.current = [];
+    };
+  }, [waypoints, modoPlan, planVisible, cargado]);
 
   // Cursor de mira mientras se planifica
   useEffect(() => {
@@ -624,26 +757,37 @@ export default function MapView() {
   }
 
   function limpiarBorrador() {
-    setPuntosPlan([]);
-    setSegmentosPlan([]);
+    setWaypoints([]);
+    setSegmentos([]);
     setMetricasPlan(null);
   }
 
   function deshacerPunto() {
-    setPuntosPlan((p) => p.slice(0, -1));
-    setSegmentosPlan((s) =>
-      s.length >= puntosPlan.length - 1 ? s.slice(0, -1) : s,
-    );
+    setWaypoints((w) => w.slice(0, -1));
+  }
+
+  function eliminarWaypoint(id: string) {
+    setWaypoints((w) => w.filter((x) => x.id !== id));
+  }
+
+  function moverWaypoint(indice: number, direccion: -1 | 1) {
+    setWaypoints((w) => {
+      const destino = indice + direccion;
+      if (destino < 0 || destino >= w.length) return w;
+      const copia = [...w];
+      [copia[indice], copia[destino]] = [copia[destino], copia[indice]];
+      return copia;
+    });
   }
 
   async function guardarBorrador(nombre: string) {
-    if (!metricasPlan || lineaPlan.length < 2) return;
+    if (!metricasPlan || trazadoPlan.length < 2) return;
     setGuardandoPlan(true);
     try {
       await guardarPlan({
         nombre,
-        puntos: puntosPlan,
-        linea: lineaPlan,
+        puntos: nodosPlan,
+        linea: trazadoPlan,
         metricas: metricasPlan,
         autor: sesion.usuario
           ? {
@@ -972,7 +1116,7 @@ export default function MapView() {
       {/* Planificador de rutas propias */}
       {modoPlan && (
         <Planificador
-          numPuntos={puntosPlan.length}
+          waypoints={waypoints}
           metricas={metricasPlan}
           midiendo={midiendo}
           enrutando={enrutando}
@@ -980,6 +1124,8 @@ export default function MapView() {
           onModoSenderos={setModoSenderos}
           onDeshacer={deshacerPunto}
           onLimpiar={limpiarBorrador}
+          onEliminar={eliminarWaypoint}
+          onMover={moverWaypoint}
           onGuardar={guardarBorrador}
           guardando={guardandoPlan}
           firebaseListo={isFirebaseConfigured}

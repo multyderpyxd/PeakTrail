@@ -1,3 +1,9 @@
+/** Punto marcado por el usuario al planificar (posición del clic/arrastre). */
+export interface Waypoint {
+  id: string;
+  lngLat: [number, number];
+}
+
 /**
  * Ruta planificada por el usuario con el planificador del mapa.
  * Se guarda en la colección `planes` de Firestore (sin dueño hasta que
