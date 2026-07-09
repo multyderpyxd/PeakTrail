@@ -29,11 +29,13 @@ import { useConexion } from "@/lib/conexion";
  */
 export function SeccionStrava({
   usuario,
+  grupoId,
   realizados,
   rutas,
   onActividades,
 }: {
   usuario: User;
+  grupoId: string;
   realizados: Map<string, Realizado>;
   rutas: Map<string, Ruta> | null;
   onActividades?: (todas: ActividadStrava[]) => void;
@@ -60,7 +62,7 @@ export function SeccionStrava({
       }
       setEstado(`Emparejando ${nuevas.length} actividades nuevas…`);
       const planes = isFirebaseConfigured
-        ? await listarPlanes().catch(() => [])
+        ? await listarPlanes(grupoId).catch(() => [])
         : [];
 
       let novedades = 0;
@@ -102,11 +104,14 @@ export function SeccionStrava({
           })),
         ];
         for (const nuevo of nuevos) {
-          if (realizados.has(idRealizado(usuario.uid, nuevo.tipo, nuevo.refId)))
+          if (
+            realizados.has(idRealizado(usuario.uid, grupoId, nuevo.tipo, nuevo.refId))
+          )
             continue;
           await marcarRealizado({
             usuario: usuario.uid,
             nombreUsuario: usuario.displayName ?? usuario.email ?? "Anónimo",
+            grupoId,
             ...nuevo,
             fecha: actividad.fecha,
             notas: `Strava: ${actividad.nombre}`,

@@ -22,17 +22,19 @@ function fechaCorta(iso: string | null): string {
   });
 }
 
-/** Fotos y comentarios del grupo al pie de las fichas (solo invitados). */
+/** Fotos y comentarios del grupo activo al pie de las fichas. */
 export function SeccionSocial({
+  grupoId,
   refTipo,
   refId,
   usuario,
-  esInvitado,
+  puedeMarcar,
 }: {
+  grupoId: string | null;
   refTipo: RefTipo;
   refId: string;
   usuario: User | null;
-  esInvitado: boolean;
+  puedeMarcar: boolean;
 }) {
   const [comentarios, setComentarios] = useState<Comentario[]>([]);
   const [fotos, setFotos] = useState<Foto[]>([]);
@@ -44,19 +46,20 @@ export function SeccionSocial({
   const archivoRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!esInvitado) return;
+    if (!puedeMarcar || !grupoId) return;
     setCargado(false);
-    const dejarDeEscuchar = escucharSocial(refTipo, refId, (datos) => {
+    const dejarDeEscuchar = escucharSocial(grupoId, refTipo, refId, (datos) => {
       setComentarios(datos.comentarios);
       setFotos(datos.fotos);
       setCargado(datos.listo);
     });
     return dejarDeEscuchar;
-  }, [refTipo, refId, esInvitado]);
+  }, [grupoId, refTipo, refId, puedeMarcar]);
 
-  if (!esInvitado || !usuario) return null;
+  if (!puedeMarcar || !grupoId || !usuario) return null;
 
   const identidad = {
+    grupoId,
     usuario: usuario.uid,
     nombreUsuario: usuario.displayName ?? usuario.email ?? "Anónimo",
   };

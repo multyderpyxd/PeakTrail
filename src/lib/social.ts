@@ -25,6 +25,7 @@ export type RefTipo = "elemento" | "ruta";
 
 export interface Comentario {
   id: string;
+  grupoId: string;
   refTipo: RefTipo;
   refId: string;
   usuario: string;
@@ -35,6 +36,7 @@ export interface Comentario {
 
 export interface Foto {
   id: string;
+  grupoId: string;
   refTipo: RefTipo;
   refId: string;
   usuario: string;
@@ -61,18 +63,24 @@ export interface DatosSocial {
 }
 
 /**
- * Escucha en vivo los comentarios y fotos de un elemento o ruta. Dos
- * queries (una por colección), cada una ya filtrada en el servidor por
- * refTipo+refId (dos igualdades: no requiere índice compuesto). `listo`
- * espera a que ambas hayan entregado su primer snapshot, para no pintar
- * «sin fotos todavía» solo porque esa colección tardó un instante más que
- * la de comentarios en resolver.
+ * Escucha en vivo los comentarios y fotos de un elemento o ruta, dentro del
+ * grupo activo. Dos queries (una por colección), cada una ya filtrada en el
+ * servidor por grupoId+refTipo+refId (tres igualdades, sin `orderBy`: sigue
+ * sin requerir índice compuesto). Sin grupo, no se suscribe. `listo` espera
+ * a que ambas hayan entregado su primer snapshot, para no pintar «sin fotos
+ * todavía» solo porque esa colección tardó un instante más que la de
+ * comentarios en resolver.
  */
 export function escucharSocial(
+  grupoId: string | null,
   refTipo: RefTipo,
   refId: string,
   alCambiar: (datos: DatosSocial) => void,
 ): Unsubscribe {
+  if (!grupoId) {
+    alCambiar({ comentarios: [], fotos: [], listo: true });
+    return () => {};
+  }
   const db = getDb();
   let comentarios: Comentario[] = [];
   let fotos: Foto[] = [];
@@ -88,6 +96,7 @@ export function escucharSocial(
   const dejarComentarios = onSnapshot(
     query(
       collection(db, "comentarios"),
+      where("grupoId", "==", grupoId),
       where("refTipo", "==", refTipo),
       where("refId", "==", refId),
     ),
@@ -106,6 +115,7 @@ export function escucharSocial(
   const dejarFotos = onSnapshot(
     query(
       collection(db, "fotos"),
+      where("grupoId", "==", grupoId),
       where("refTipo", "==", refTipo),
       where("refId", "==", refId),
     ),

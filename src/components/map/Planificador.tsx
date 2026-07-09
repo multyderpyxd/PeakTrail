@@ -142,6 +142,7 @@ export function Planificador({
   onGuardar,
   guardando,
   firebaseListo,
+  hayGrupoActivo,
   planes,
   planesHechos,
   planVisible,
@@ -165,6 +166,8 @@ export function Planificador({
   onGuardar: (nombre: string) => void;
   guardando: boolean;
   firebaseListo: boolean;
+  /** false si el usuario no tiene un grupo activo (no puede guardar planes). */
+  hayGrupoActivo: boolean;
   planes: RutaPlaneada[] | null;
   /** Ids de planes hechos por mí (emparejado de Strava o marcado manual). */
   planesHechos?: Set<string>;
@@ -373,7 +376,7 @@ export function Planificador({
             />
             <button
               type="button"
-              disabled={!firebaseListo || guardando || !metricas}
+              disabled={!firebaseListo || !hayGrupoActivo || guardando || !metricas}
               onClick={() => onGuardar(nombre.trim() || "Ruta propia")}
               className="rounded bg-ocre-600 px-3 py-1.5 text-sm text-roca-950 transition-colors hover:bg-ocre-400 disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -386,6 +389,11 @@ export function Planificador({
             Configura Firebase (.env.local) para poder guardar rutas.
           </p>
         )}
+        {firebaseListo && !hayGrupoActivo && (
+          <p className="text-xs text-roca-300">
+            Necesitas pertenecer a un grupo para guardar rutas.
+          </p>
+        )}
 
         <div className="border-t border-roca-800 pt-3">
           <h3 className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
@@ -393,7 +401,11 @@ export function Planificador({
           </h3>
           {!planes && (
             <p className="mt-2 text-xs text-roca-300">
-              {firebaseListo ? "Cargando…" : "Sin conexión con Firebase."}
+              {!firebaseListo
+                ? "Sin conexión con Firebase."
+                : !hayGrupoActivo
+                  ? "Necesitas pertenecer a un grupo para ver rutas guardadas."
+                  : "Cargando…"}
             </p>
           )}
           {planes && planes.length === 0 && (

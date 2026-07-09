@@ -84,6 +84,7 @@ export function Explorador({
   actividades,
   realizados,
   usuario,
+  grupoId,
   onIr,
   onVerActividad,
   onCerrar,
@@ -93,6 +94,7 @@ export function Explorador({
   actividades: ActividadStrava[] | null;
   realizados: Map<string, Realizado>;
   usuario: User | null;
+  grupoId: string | null;
   onIr: (resultado: ResultadoBusqueda) => void;
   onVerActividad: (actividad: ActividadStrava) => void;
   onCerrar: () => void;
@@ -110,7 +112,9 @@ export function Explorador({
   const [limite, setLimite] = useState(PASO_LISTA);
 
   const hechoPorMi = (tipo: Realizado["tipo"], refId: string) =>
-    usuario ? realizados.has(idRealizado(usuario.uid, tipo, refId)) : false;
+    usuario && grupoId
+      ? realizados.has(idRealizado(usuario.uid, grupoId, tipo, refId))
+      : false;
 
   // Filas de la pestaña activa, con todo lo necesario para filtrar y ordenar
   const filas = useMemo<FilaDatos[]>(() => {

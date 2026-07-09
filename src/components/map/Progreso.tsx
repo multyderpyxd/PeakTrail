@@ -3,7 +3,6 @@ import type { User } from "firebase/auth";
 import type { Comunidad } from "@/types/catalogo";
 import type { Realizado } from "@/lib/realizados";
 import type { ActividadStrava } from "@/lib/strava";
-import { expulsar, invitar, listarInvitados, type Invitado } from "@/lib/invitados";
 import {
   anadirAmigo,
   ascenderAdmin,
@@ -206,90 +205,11 @@ function Pendiente({
   );
 }
 
-function Invitaciones({ emailPropio }: { emailPropio: string }) {
-  const [invitados, setInvitados] = useState<Invitado[] | null>(null);
-  const [correo, setCorreo] = useState("");
-  const [ocupado, setOcupado] = useState(false);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    listarInvitados().then(setInvitados).catch(() => setError(true));
-  }, []);
-
-  async function anadir(e: React.FormEvent) {
-    e.preventDefault();
-    const email = correo.trim().toLowerCase();
-    if (!email.includes("@") || ocupado) return;
-    setOcupado(true);
-    try {
-      await invitar(email);
-      setCorreo("");
-      setInvitados(await listarInvitados());
-    } catch {
-      setError(true);
-    } finally {
-      setOcupado(false);
-    }
-  }
-
-  return (
-    <div className="border-t border-roca-800 pt-3">
-      <h3 className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
-        Invitaciones
-      </h3>
-      {error && (
-        <p className="mt-2 text-xs text-ocre-400">
-          No se pudo acceder a la lista (¿permisos de las reglas?).
-        </p>
-      )}
-      <ul className="mt-2 space-y-1">
-        {invitados?.map((inv) => (
-          <li key={inv.email} className="flex items-center gap-2 text-xs">
-            <span className="min-w-0 flex-1 truncate text-hielo-200">
-              {inv.email}
-              {inv.admin && <span className="ml-1.5 text-roca-300">admin</span>}
-            </span>
-            {inv.email !== emailPropio && (
-              <button
-                type="button"
-                aria-label={`Expulsar a ${inv.email}`}
-                onClick={async () => {
-                  await expulsar(inv.email).catch(() => setError(true));
-                  setInvitados(await listarInvitados().catch(() => invitados));
-                }}
-                className="p-1 text-roca-400 transition-colors hover:text-nieve"
-              >
-                <IconoPapelera width={13} height={13} />
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-      <form onSubmit={anadir} className="mt-2 flex gap-2">
-        <input
-          type="email"
-          value={correo}
-          onChange={(e) => setCorreo(e.target.value)}
-          placeholder="correo@ejemplo.com"
-          className="min-w-0 flex-1 rounded border border-roca-700 bg-roca-900/70 px-2 py-1 text-xs text-nieve placeholder:text-roca-500 focus:border-ocre-600 focus:outline-none"
-        />
-        <button
-          type="submit"
-          disabled={ocupado}
-          className="rounded bg-ocre-600 px-2.5 py-1 text-xs text-roca-950 transition-colors hover:bg-ocre-400 disabled:opacity-40"
-        >
-          Invitar
-        </button>
-      </form>
-    </div>
-  );
-}
-
 /**
- * Roster global de amigos (colección `amigos`, sustituye a `invitados`
- * cuando se corte). El botón «hacer/quitar admin» solo existe en el DOM si
- * `propietario` es true: ningún admin normal puede ver siquiera el control,
- * y las reglas de Firestore lo impiden aunque alguien lo forzara a mano.
+ * Roster global de amigos (colección `amigos`). El botón «hacer/quitar
+ * admin» solo existe en el DOM si `propietario` es true: ningún admin
+ * normal puede ver siquiera el control, y las reglas de Firestore lo
+ * impiden aunque alguien lo forzara a mano.
  */
 function PanelAmigos({
   propietario,
@@ -607,10 +527,10 @@ const FILAS_PERSONALES = [
 export function Progreso({
   realizados,
   usuario,
-  esInvitado,
-  esAdmin,
-  adminGrupos,
+  grupoActivoId,
+  admin,
   propietario,
+  nombreGrupo,
   rutas,
   totalRutas,
   onCerrar,
@@ -618,11 +538,13 @@ export function Progreso({
 }: {
   realizados: Map<string, Realizado>;
   usuario: User | null;
-  esInvitado: boolean;
-  esAdmin: boolean;
-  /** Admin del sistema de grupos nuevo (roster `amigos`), distinto del `esAdmin` de `invitados`. */
-  adminGrupos: boolean;
+  /** Grupo activo (null si el usuario no pertenece a ninguno). */
+  grupoActivoId: string | null;
+  /** Admin del sistema de grupos (roster `amigos`) o propietario. */
+  admin: boolean;
   propietario: boolean;
+  /** Nombre del grupo activo, para los títulos de las secciones compartidas. */
+  nombreGrupo?: string | null;
   rutas: Map<string, Ruta> | null;
   totalRutas: number;
   onCerrar: () => void;
@@ -834,7 +756,7 @@ export function Progreso({
           </p>
         )}
 
-        <Desplegable titulo="Evolución del grupo">
+        <Desplegable titulo={nombreGrupo ? `Evolución de ${nombreGrupo}` : "Evolución del grupo"}>
           <p className="text-xs text-roca-300">
             Actividades marcadas por mes, último año
           </p>
@@ -844,7 +766,7 @@ export function Progreso({
         </Desplegable>
 
         <Desplegable
-          titulo="El grupo"
+          titulo={nombreGrupo ?? "El grupo"}
           resumen={grupo.length > 0 ? `${grupo.length} personas` : undefined}
         >
           {grupo.length === 0 ? (
@@ -880,20 +802,17 @@ export function Progreso({
           )}
         </Desplegable>
 
-        {usuario && esInvitado && (
+        {usuario && grupoActivoId && (
           <SeccionStrava
             usuario={usuario}
+            grupoId={grupoActivoId}
             realizados={realizados}
             rutas={rutas}
             onActividades={onActividades}
           />
         )}
 
-        {esAdmin && usuario?.email && (
-          <Invitaciones emailPropio={usuario.email.toLowerCase()} />
-        )}
-
-        {adminGrupos && usuario?.email && (
+        {admin && usuario?.email && (
           <>
             <PanelAmigos
               propietario={propietario}

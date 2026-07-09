@@ -4,10 +4,10 @@ import {
   deleteDoc,
   doc,
   getDocs,
-  orderBy,
   query,
   serverTimestamp,
   Timestamp,
+  where,
 } from "firebase/firestore";
 import { getDb, isFirebaseConfigured } from "./firebase";
 import type { MetricasLinea } from "./elevacion";
@@ -27,6 +27,7 @@ const dePerfil = (arr: { km: number; m: number }[]): [number, number][] =>
   arr.map((p) => [p.km, p.m]);
 
 export async function guardarPlan(datos: {
+  grupoId: string;
   nombre: string;
   puntos: [number, number][];
   linea: [number, number][];
@@ -35,6 +36,7 @@ export async function guardarPlan(datos: {
 }): Promise<string> {
   const { perfil, ...resumen } = datos.metricas;
   const referencia = await addDoc(collection(getDb(), COLECCION), {
+    grupoId: datos.grupoId,
     nombre: datos.nombre,
     usuario: datos.autor?.uid ?? null,
     nombreUsuario: datos.autor?.nombre ?? null,
@@ -47,30 +49,38 @@ export async function guardarPlan(datos: {
   return referencia.id;
 }
 
-export async function listarPlanes(): Promise<RutaPlaneada[]> {
+/**
+ * Planes del grupo activo. Sin `orderBy` en el servidor a propósito: junto
+ * con el `where("grupoId",...)` exigiría un índice compuesto (igualdad +
+ * orden en campos distintos); se ordena en cliente, igual que ya hace
+ * social.ts con comentarios/fotos.
+ */
+export async function listarPlanes(grupoId: string): Promise<RutaPlaneada[]> {
   const resultado = await getDocs(
-    query(collection(getDb(), COLECCION), orderBy("creadaEl", "desc")),
+    query(collection(getDb(), COLECCION), where("grupoId", "==", grupoId)),
   );
-  return resultado.docs.map((d) => {
-    const datos = d.data();
-    return {
-      id: d.id,
-      nombre: datos.nombre,
-      nombreUsuario: datos.nombreUsuario ?? null,
-      creadaEl:
-        datos.creadaEl instanceof Timestamp
-          ? datos.creadaEl.toDate().toISOString()
-          : null,
-      puntos: deCoords(datos.puntos),
-      linea: deCoords(datos.linea),
-      perfil: dePerfil(datos.perfil),
-      distanciaKm: datos.distanciaKm,
-      desnivelPos: datos.desnivelPos,
-      desnivelNeg: datos.desnivelNeg,
-      altMin: datos.altMin,
-      altMax: datos.altMax,
-    };
-  });
+  return resultado.docs
+    .map((d) => {
+      const datos = d.data();
+      return {
+        id: d.id,
+        nombre: datos.nombre,
+        nombreUsuario: datos.nombreUsuario ?? null,
+        creadaEl:
+          datos.creadaEl instanceof Timestamp
+            ? datos.creadaEl.toDate().toISOString()
+            : null,
+        puntos: deCoords(datos.puntos),
+        linea: deCoords(datos.linea),
+        perfil: dePerfil(datos.perfil),
+        distanciaKm: datos.distanciaKm,
+        desnivelPos: datos.desnivelPos,
+        desnivelNeg: datos.desnivelNeg,
+        altMin: datos.altMin,
+        altMax: datos.altMax,
+      };
+    })
+    .sort((a, b) => ((a.creadaEl ?? "") < (b.creadaEl ?? "") ? 1 : -1));
 }
 
 export async function borrarPlan(id: string): Promise<void> {

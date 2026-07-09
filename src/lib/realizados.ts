@@ -3,22 +3,25 @@ import {
   deleteDoc,
   doc,
   onSnapshot,
+  query,
   serverTimestamp,
   setDoc,
+  where,
   type Unsubscribe,
 } from "firebase/firestore";
 import { getDb } from "./firebase";
 
 /**
- * Registro de "lo he hecho": un documento por usuario y elemento/ruta,
- * con id determinista para que marcar/desmarcar sea idempotente.
- * Todos los del grupo leen todo; cada uno escribe solo lo suyo
- * (garantizado por las reglas de firestore.rules).
+ * Registro de "lo he hecho": un documento por usuario, grupo y elemento/ruta,
+ * con id determinista para que marcar/desmarcar sea idempotente. Cada grupo
+ * ve y comparte solo lo suyo (reglas de firestore.rules vía miembroDeGrupo);
+ * cada uno escribe solo lo suyo.
  */
 export interface Realizado {
   id: string;
   usuario: string; // uid
   nombreUsuario: string;
+  grupoId: string;
   tipo: "elemento" | "ruta" | "plan";
   refId: string;
   /** Nombre denormalizado para listados sin cruzar con el catálogo. */
@@ -30,14 +33,24 @@ export interface Realizado {
   notas?: string;
 }
 
-export function idRealizado(uid: string, tipo: Realizado["tipo"], refId: string) {
-  return `${uid}__${tipo}__${refId}`;
+/**
+ * El grupo entra en el id: el mismo usuario puede marcar el mismo elemento
+ * en dos grupos distintos (cada uno con su propio ranking) sin que un
+ * logro pise al otro.
+ */
+export function idRealizado(
+  uid: string,
+  grupoId: string,
+  tipo: Realizado["tipo"],
+  refId: string,
+) {
+  return `${uid}__${grupoId}__${tipo}__${refId}`;
 }
 
 export async function marcarRealizado(
   datos: Omit<Realizado, "id">,
 ): Promise<void> {
-  const id = idRealizado(datos.usuario, datos.tipo, datos.refId);
+  const id = idRealizado(datos.usuario, datos.grupoId, datos.tipo, datos.refId);
   await setDoc(doc(getDb(), "realizados", id), {
     ...datos,
     notas: datos.notas ?? "",
@@ -49,13 +62,18 @@ export async function desmarcarRealizado(id: string): Promise<void> {
   await deleteDoc(doc(getDb(), "realizados", id));
 }
 
-/** Escucha en vivo todos los realizados del grupo. */
+/** Escucha en vivo los realizados del grupo activo; sin grupo, no se suscribe. */
 export function escucharRealizados(
+  grupoId: string | null,
   alCambiar: (realizados: Map<string, Realizado>) => void,
   alFallar?: () => void,
 ): Unsubscribe {
+  if (!grupoId) {
+    alCambiar(new Map());
+    return () => {};
+  }
   return onSnapshot(
-    collection(getDb(), "realizados"),
+    query(collection(getDb(), "realizados"), where("grupoId", "==", grupoId)),
     (captura) => {
       const mapa = new Map<string, Realizado>();
       captura.forEach((d) => {

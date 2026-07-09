@@ -2,16 +2,11 @@ rules_version = '2';
 
 // Reglas de PeakTrail: pégalas en la consola de Firebase
 // (Firestore Database → Reglas) cuando quieras cerrar el modo de prueba.
-// La lista de invitados se gestiona con `npm run invitados:anadir -- email`
-// ANTES de aplicar estas reglas (después, solo desde la consola).
-//
-// Sistema de grupos en construcción (checkpoint 1): `amigos`/`grupos` son
-// colecciones nuevas que conviven con el `invitados` de siempre sin tocarlo;
-// `planes`/`realizados`/`comentarios`/`fotos` siguen en el modelo de grupo
-// único hasta el checkpoint de corte, que los pasará a `grupoId` +
-// miembroDeGrupo() y retirará `invitados`. El email del propietario es una
-// constante fija (sin ruta en la app para crearlo): si cambia, edítalo aquí
-// Y en src/lib/propietario.ts.
+// El roster de amigos se gestiona con `npm run amigos:anadir -- email`
+// ANTES de aplicar estas reglas (después, desde la app como propietario/admin,
+// o desde la consola). El email del propietario es una constante fija (sin
+// ruta en la app para crearlo): si cambia, edítalo aquí Y en
+// src/lib/propietario.ts.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -19,24 +14,13 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email != null;
     }
 
-    function invitado() {
-      return autenticado() &&
-        exists(/databases/$(database)/documents/invitados/$(request.auth.token.email));
-    }
-
-    // Los admins (campo admin: true en su propio doc de invitados) pueden
-    // gestionar la lista desde la app
-    function esAdmin() {
-      return autenticado() &&
-        get(/databases/$(database)/documents/invitados/$(request.auth.token.email)).data.admin == true;
-    }
-
     function esPropietario() {
       return autenticado() && request.auth.token.email == "josemiangos@gmail.com";
     }
 
-    // Admin del sistema de grupos (roster `amigos`, no el `invitados` de arriba).
-    function esAdminGrupos() {
+    // Admin del roster de amigos y de los grupos (campo admin: true en su
+    // propio doc de `amigos`), o el propietario.
+    function esAdmin() {
       return esPropietario() ||
         (autenticado() &&
           exists(/databases/$(database)/documents/amigos/$(request.auth.token.email)) &&
@@ -56,22 +40,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Cada usuario puede comprobar su propia invitación; los admins
-    // pueden listar, invitar y expulsar (nunca borrarse a sí mismos)
-    match /invitados/{email} {
-      allow read: if esAdmin() || (autenticado() && request.auth.token.email == email);
-      allow create, update: if esAdmin();
-      allow delete: if esAdmin() && request.auth.token.email != email;
-    }
-
-    // Roster global de amigos (reemplaza a `invitados` cuando se corte).
-    // Solo el propietario puede tocar el campo `admin`: un admin no
-    // propietario crea/edita amigos pero nunca asciende ni desciende a nadie.
+    // Roster global de amigos. Solo el propietario puede tocar el campo
+    // `admin`: un admin no propietario crea/edita amigos pero nunca
+    // asciende ni desciende a nadie.
     match /amigos/{email} {
-      allow read: if esAdminGrupos() || (autenticado() && request.auth.token.email == email);
-      allow create: if esPropietario() || (esAdminGrupos() && request.resource.data.admin == false);
-      allow update: if esPropietario() || (esAdminGrupos() && request.resource.data.admin == resource.data.admin);
-      allow delete: if esAdminGrupos() && request.auth.token.email != email;
+      allow read: if esAdmin() || (autenticado() && request.auth.token.email == email);
+      allow create: if esPropietario() || (esAdmin() && request.resource.data.admin == false);
+      allow update: if esPropietario() || (esAdmin() && request.resource.data.admin == resource.data.admin);
+      allow delete: if esAdmin() && request.auth.token.email != email;
     }
 
     // Grupos: cualquier admin/propietario crea, renombra, gestiona
@@ -79,36 +55,40 @@ service cloud.firestore {
     // dado el círculo pequeño y de confianza). Un miembro normal solo lee
     // los grupos a los que pertenece.
     match /grupos/{grupoId} {
-      allow read: if esAdminGrupos() || (autenticado() && request.auth.token.email in resource.data.miembros);
-      allow create, update, delete: if esAdminGrupos();
+      allow read: if esAdmin() || (autenticado() && request.auth.token.email in resource.data.miembros);
+      allow create, update, delete: if esAdmin();
     }
 
-    // Rutas planificadas: compartidas dentro del grupo
+    // Rutas planificadas: compartidas dentro del grupo al que pertenecen
     match /planes/{id} {
-      allow read, create: if invitado();
-      allow update, delete: if invitado();
+      allow read: if miembroDeGrupo(resource.data.grupoId);
+      allow create: if miembroDeGrupo(request.resource.data.grupoId);
+      allow update, delete: if miembroDeGrupo(resource.data.grupoId);
     }
 
-    // Registro de realizados: cada uno escribe lo suyo, todos lo ven
+    // Registro de realizados: cada uno escribe lo suyo, todo el grupo lo ve
     match /realizados/{id} {
-      allow read: if invitado();
-      allow create, update: if invitado() &&
+      allow read: if miembroDeGrupo(resource.data.grupoId);
+      allow create, update: if miembroDeGrupo(request.resource.data.grupoId) &&
         request.resource.data.usuario == request.auth.uid;
-      allow delete: if invitado() && resource.data.usuario == request.auth.uid;
+      allow delete: if miembroDeGrupo(resource.data.grupoId) &&
+        resource.data.usuario == request.auth.uid;
     }
 
-    // Fotos y comentarios del grupo: todos leen, cada uno borra lo suyo
+    // Fotos y comentarios del grupo: todo el grupo lee, cada uno borra lo suyo
     match /comentarios/{id} {
-      allow read: if invitado();
-      allow create: if invitado() &&
+      allow read: if miembroDeGrupo(resource.data.grupoId);
+      allow create: if miembroDeGrupo(request.resource.data.grupoId) &&
         request.resource.data.usuario == request.auth.uid;
-      allow delete: if invitado() && resource.data.usuario == request.auth.uid;
+      allow delete: if miembroDeGrupo(resource.data.grupoId) &&
+        resource.data.usuario == request.auth.uid;
     }
     match /fotos/{id} {
-      allow read: if invitado();
-      allow create: if invitado() &&
+      allow read: if miembroDeGrupo(resource.data.grupoId);
+      allow create: if miembroDeGrupo(request.resource.data.grupoId) &&
         request.resource.data.usuario == request.auth.uid;
-      allow delete: if invitado() && resource.data.usuario == request.auth.uid;
+      allow delete: if miembroDeGrupo(resource.data.grupoId) &&
+        resource.data.usuario == request.auth.uid;
     }
   }
 }

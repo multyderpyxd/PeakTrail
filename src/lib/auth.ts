@@ -17,14 +17,10 @@ import type { GrupoResumen } from "@/types/grupo";
 export interface EstadoUsuario {
   cargando: boolean;
   usuario: User | null;
-  /** true si su correo está en la lista cerrada (colección `invitados`). */
-  invitado: boolean;
-  /** true si puede gestionar la lista de invitados desde la app. */
-  admin: boolean;
   /** true si está en el roster global `amigos`, o es el propietario. */
   amigo: boolean;
   /** true si puede gestionar amigos y grupos (admin de `amigos` o propietario). */
-  adminGrupos: boolean;
+  admin: boolean;
   /** true solo para el email fijo del propietario (ver src/lib/propietario.ts). */
   propietario: boolean;
   /** Grupos de los que es miembro. */
@@ -32,15 +28,13 @@ export interface EstadoUsuario {
 }
 
 const ESTADO_VACIO: Omit<EstadoUsuario, "cargando" | "usuario"> = {
-  invitado: false,
-  admin: false,
   amigo: false,
-  adminGrupos: false,
+  admin: false,
   propietario: false,
   grupos: [],
 };
 
-/** Sesión actual y pertenencia al grupo/roster, reactiva a entradas/salidas. */
+/** Sesión actual y pertenencia al roster/grupos, reactiva a entradas/salidas. */
 export function useUsuario(): EstadoUsuario {
   const [estado, setEstado] = useState<EstadoUsuario>({
     cargando: isFirebaseConfigured,
@@ -56,22 +50,17 @@ export function useUsuario(): EstadoUsuario {
         return;
       }
       const email = usuario.email.toLowerCase();
-      let invitado = false;
-      let admin = false;
       let amigo = esPropietario(email);
-      let adminGrupos = esPropietario(email);
+      let admin = esPropietario(email);
       let grupos: GrupoResumen[] = [];
       try {
-        const [fichaInvitado, fichaAmigo, gruposDe] = await Promise.all([
-          getDoc(doc(getDb(), "invitados", email)),
+        const [fichaAmigo, gruposDe] = await Promise.all([
           getDoc(doc(getDb(), "amigos", email)),
           listarGruposDe(email),
         ]);
-        invitado = fichaInvitado.exists();
-        admin = fichaInvitado.data()?.admin === true;
         if (fichaAmigo.exists()) {
           amigo = true;
-          if (fichaAmigo.data()?.admin === true) adminGrupos = true;
+          if (fichaAmigo.data()?.admin === true) admin = true;
         }
         grupos = gruposDe;
       } catch {
@@ -80,10 +69,8 @@ export function useUsuario(): EstadoUsuario {
       setEstado({
         cargando: false,
         usuario,
-        invitado,
-        admin,
         amigo,
-        adminGrupos,
+        admin,
         propietario: esPropietario(email),
         grupos,
       });

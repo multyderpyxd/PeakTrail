@@ -13,8 +13,8 @@ import { getDb } from "./firebase";
 /**
  * Roster global de amigos (colección `amigos`, doc id = email en minúscula),
  * independiente de los grupos: un admin añade a alguien una vez aquí y
- * luego lo asigna a uno o varios grupos (src/lib/grupos.ts). Reemplaza a
- * `invitados.ts`, que se retira en el Hito de corte (ver notas-mejoras.md).
+ * luego lo asigna a uno o varios grupos (src/lib/grupos.ts). Sustituye al
+ * antiguo `invitados.ts` (colección de grupo único, retirada).
  * Las reglas de firestore.rules solo dejan tocar el campo `admin` al
  * propietario: ascenderAdmin/descenderAdmin fallarán con permiso denegado
  * para cualquier otro admin, aunque la UI ya oculte el botón.

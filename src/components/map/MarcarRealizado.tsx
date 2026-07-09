@@ -26,7 +26,7 @@ export function MarcarRealizado({
   onDesmarcar,
 }: {
   realizado: Realizado | null;
-  /** true solo para usuarios invitados con sesión. */
+  /** true solo con sesión y perteneciendo al grupo activo. */
   puedeMarcar: boolean;
   onMarcar: (fecha: string, notas: string) => Promise<void>;
   onDesmarcar: () => Promise<void>;

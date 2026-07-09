@@ -41,7 +41,7 @@ export function FichaElemento({
   onMarcar,
   onDesmarcar,
   usuario,
-  esInvitado,
+  grupoId,
 }: {
   elemento: ElementoGeografico;
   onCerrar: () => void;
@@ -50,7 +50,7 @@ export function FichaElemento({
   onMarcar: (fecha: string, notas: string) => Promise<void>;
   onDesmarcar: () => Promise<void>;
   usuario: User | null;
-  esInvitado: boolean;
+  grupoId: string | null;
 }) {
   const color =
     COLOR_TIPO[elemento.tipo as keyof typeof COLOR_TIPO] ?? "#c99655";
@@ -136,10 +136,11 @@ export function FichaElemento({
           onDesmarcar={onDesmarcar}
         />
         <SeccionSocial
+          grupoId={grupoId}
           refTipo="elemento"
           refId={elemento.id}
           usuario={usuario}
-          esInvitado={esInvitado}
+          puedeMarcar={puedeMarcar}
         />
       </div>
     </section>

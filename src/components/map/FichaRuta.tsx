@@ -40,7 +40,7 @@ export function FichaRuta({
   onMarcar,
   onDesmarcar,
   usuario,
-  esInvitado,
+  grupoId,
 }: {
   ruta: Ruta;
   invertida: boolean;
@@ -52,7 +52,7 @@ export function FichaRuta({
   onMarcar: (fecha: string, notas: string) => Promise<void>;
   onDesmarcar: () => Promise<void>;
   usuario: User | null;
-  esInvitado: boolean;
+  grupoId: string | null;
 }) {
   const color = COLOR_RED[ruta.red];
   const enlaceOsm = `https://www.openstreetmap.org/relation/${ruta.fuente.osmId}`;
@@ -201,10 +201,11 @@ export function FichaRuta({
           onDesmarcar={onDesmarcar}
         />
         <SeccionSocial
+          grupoId={grupoId}
           refTipo="ruta"
           refId={ruta.id}
           usuario={usuario}
-          esInvitado={esInvitado}
+          puedeMarcar={puedeMarcar}
         />
 
         <p className="mt-2 text-xs text-roca-300">

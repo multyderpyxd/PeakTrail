@@ -15,6 +15,8 @@ import { PanelCapas } from "./PanelCapas";
 import {
   IconoBrujula,
   IconoDescargaOffline,
+  IconoDespliegue,
+  IconoGrupo,
   IconoLista,
   IconoMas,
   IconoMenos,
@@ -81,6 +83,7 @@ import type { ActividadStrava } from "@/lib/strava";
 import { procesarRetornoStrava } from "@/lib/strava";
 import { guardarPreferencias, leerPreferencias } from "@/lib/preferencias";
 import { useConexion } from "@/lib/conexion";
+import { guardarGrupoActivo, leerGrupoActivo } from "@/lib/grupoActivo";
 
 const CAPA_ELEMENTOS = "elementos";
 const CAPA_RUTAS = "rutas";
@@ -225,7 +228,7 @@ export default function MapView() {
   const [planVisible, setPlanVisible] = useState<RutaPlaneada | null>(null);
   const marcadoresPlan = useRef<maplibregl.Marker[]>([]);
 
-  // Sesión, registro de realizados del grupo y panel de progreso
+  // Sesión, grupo activo, registro de realizados del grupo y panel de progreso
   const sesion = useUsuario();
   const [realizados, setRealizados] = useState<Map<string, Realizado>>(
     new Map(),
@@ -234,25 +237,50 @@ export default function MapView() {
   const [verExplorador, setVerExplorador] = useState(false);
   const [verDescargas, setVerDescargas] = useState(false);
   const enLinea = useConexion();
+  const [grupoActivoId, setGrupoActivoId] = useState<string | null>(null);
+  const grupoHidratado = useRef(false);
+  const [verSelectorGrupo, setVerSelectorGrupo] = useState(false);
+
+  // Hidrata el grupo activo desde localStorage una sola vez, en cuanto la
+  // sesión resuelve, validándolo contra los grupos reales (puede haber
+  // cambiado de dispositivo, o haber sido expulsado de ese grupo mientras
+  // tanto); si no hay ninguno guardado o ya no es válido, cae al primero.
+  useEffect(() => {
+    if (sesion.cargando || grupoHidratado.current) return;
+    grupoHidratado.current = true;
+    const guardado = leerGrupoActivo();
+    const valido = sesion.grupos.some((g) => g.id === guardado);
+    setGrupoActivoId(valido ? guardado : (sesion.grupos[0]?.id ?? null));
+  }, [sesion.cargando, sesion.grupos]);
+
+  function elegirGrupoActivo(id: string | null) {
+    setGrupoActivoId(id);
+    guardarGrupoActivo(id);
+  }
 
   useEffect(() => {
-    if (!sesion.invitado) {
-      setRealizados(new Map());
-      return;
-    }
-    return escucharRealizados(setRealizados);
-  }, [sesion.invitado]);
+    return escucharRealizados(grupoActivoId, setRealizados);
+  }, [grupoActivoId]);
+
+  // Los planes guardados son del grupo activo: al cambiar de grupo se
+  // invalida la caché para que el planificador los vuelva a pedir.
+  useEffect(() => {
+    setPlanes(null);
+  }, [grupoActivoId]);
 
   // Al volver del OAuth de Strava, guardar los tokens y abrir el progreso
   useEffect(() => {
     if (procesarRetornoStrava()) setVerProgreso(true);
   }, []);
 
-  const puedeMarcar = Boolean(sesion.usuario && sesion.invitado);
+  const puedeMarcar = Boolean(sesion.usuario && grupoActivoId);
 
   function realizadoDe(tipo: Realizado["tipo"], refId: string) {
-    if (!sesion.usuario) return null;
-    return realizados.get(idRealizado(sesion.usuario.uid, tipo, refId)) ?? null;
+    if (!sesion.usuario || !grupoActivoId) return null;
+    return (
+      realizados.get(idRealizado(sesion.usuario.uid, grupoActivoId, tipo, refId)) ??
+      null
+    );
   }
 
   async function marcar(
@@ -263,11 +291,12 @@ export default function MapView() {
     fecha: string,
     notas: string,
   ) {
-    if (!sesion.usuario) return;
+    if (!sesion.usuario || !grupoActivoId) return;
     await marcarRealizado({
       usuario: sesion.usuario.uid,
       nombreUsuario:
         sesion.usuario.displayName ?? sesion.usuario.email ?? "Anónimo",
+      grupoId: grupoActivoId,
       tipo,
       refId,
       nombre,
@@ -925,8 +954,8 @@ export default function MapView() {
       setVerProgreso(false);
       setVerExplorador(false);
       setVerDescargas(false);
-      if (isFirebaseConfigured && planes === null) {
-        listarPlanes()
+      if (isFirebaseConfigured && grupoActivoId && planes === null) {
+        listarPlanes(grupoActivoId)
           .then(setPlanes)
           .catch(() => setPlanes([]));
       }
@@ -1015,10 +1044,11 @@ export default function MapView() {
   }
 
   async function guardarBorrador(nombre: string) {
-    if (!metricasPlan || trazadoPlan.length < 2) return;
+    if (!metricasPlan || trazadoPlan.length < 2 || !grupoActivoId) return;
     setGuardandoPlan(true);
     try {
       await guardarPlan({
+        grupoId: grupoActivoId,
         nombre,
         puntos: nodosPlan,
         linea: trazadoPlan,
@@ -1031,7 +1061,7 @@ export default function MapView() {
             }
           : null,
       });
-      const lista = await listarPlanes();
+      const lista = await listarPlanes(grupoActivoId);
       setPlanes(lista);
       const guardada = lista.find((p) => p.nombre === nombre) ?? null;
       setPlanVisible(guardada);
@@ -1344,10 +1374,52 @@ export default function MapView() {
                   <p className="truncate text-xs text-hielo-200">
                     {sesion.usuario.displayName ?? sesion.usuario.email}
                   </p>
-                  {!sesion.invitado && (
-                    <p className="text-[10px] text-ocre-400">Sin invitación</p>
+                  {sesion.grupos.length === 0 && (
+                    <p className="text-[10px] text-ocre-400">Sin grupo</p>
                   )}
                 </div>
+                {sesion.grupos.length > 1 && (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      aria-expanded={verSelectorGrupo}
+                      onClick={() => setVerSelectorGrupo((v) => !v)}
+                      className="flex items-center gap-1.5 rounded-full border border-roca-700 px-2.5 py-1 text-[11px] text-hielo-200 transition-colors hover:border-roca-500 hover:text-nieve"
+                    >
+                      <IconoGrupo width={13} height={13} />
+                      <span className="max-w-20 truncate">
+                        {sesion.grupos.find((g) => g.id === grupoActivoId)?.nombre ??
+                          "Grupo"}
+                      </span>
+                      <IconoDespliegue
+                        width={11}
+                        height={11}
+                        className={`transition-transform ${verSelectorGrupo ? "rotate-180" : ""}`}
+                      />
+                    </button>
+                    {verSelectorGrupo && (
+                      <div className="absolute left-0 top-full z-20 mt-2 w-40 overflow-hidden rounded-lg border border-roca-700 bg-roca-950/95 shadow-lg shadow-roca-950/60">
+                        {sesion.grupos.map((g) => (
+                          <button
+                            key={g.id}
+                            type="button"
+                            onClick={() => {
+                              elegirGrupoActivo(g.id);
+                              setVerSelectorGrupo(false);
+                            }}
+                            className={`block w-full truncate px-3 py-2 text-left text-xs transition-colors ${
+                              g.id === grupoActivoId
+                                ? "bg-roca-800 text-nieve"
+                                : "text-hielo-200 hover:bg-roca-900"
+                            }`}
+                          >
+                            {g.nombre}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={salir}
@@ -1413,6 +1485,7 @@ export default function MapView() {
           onGuardar={guardarBorrador}
           guardando={guardandoPlan}
           firebaseListo={isFirebaseConfigured}
+          hayGrupoActivo={Boolean(grupoActivoId)}
           planes={planes}
           planesHechos={planesHechos}
           planVisible={planVisible}
@@ -1428,10 +1501,10 @@ export default function MapView() {
         <Progreso
           realizados={realizados}
           usuario={sesion.usuario}
-          esInvitado={sesion.invitado}
-          esAdmin={sesion.admin}
-          adminGrupos={sesion.adminGrupos}
+          grupoActivoId={grupoActivoId}
+          admin={sesion.admin}
           propietario={sesion.propietario}
+          nombreGrupo={sesion.grupos.find((g) => g.id === grupoActivoId)?.nombre}
           rutas={rutasRef.current}
           totalRutas={rutasRef.current?.size ?? 0}
           onCerrar={() => setVerProgreso(false)}
@@ -1448,6 +1521,7 @@ export default function MapView() {
           actividades={actividades}
           realizados={realizados}
           usuario={sesion.usuario}
+          grupoId={grupoActivoId}
           onIr={irAResultado}
           onVerActividad={verActividad}
           onCerrar={() => setVerExplorador(false)}
@@ -1478,7 +1552,7 @@ export default function MapView() {
             if (r) await desmarcarRealizado(r.id);
           }}
           usuario={sesion.usuario}
-          esInvitado={sesion.invitado}
+          grupoId={grupoActivoId}
         />
       )}
       {!modoPlan && seleccion?.clase === "actividad" && (
@@ -1505,7 +1579,7 @@ export default function MapView() {
             if (r) await desmarcarRealizado(r.id);
           }}
           usuario={sesion.usuario}
-          esInvitado={sesion.invitado}
+          grupoId={grupoActivoId}
         />
       )}
 

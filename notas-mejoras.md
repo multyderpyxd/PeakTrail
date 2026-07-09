@@ -182,6 +182,25 @@ correcta; esto es margen de mejora.
   compartido de qué se ha descargado, o si con el aviso verbal del grupo
   basta.
 
+## Sistema de grupos de amigos
+
+- **Admin es un rol global, no por grupo**: cualquier admin puede gestionar
+  cualquier grupo (crear, renombrar, añadir/quitar miembros), no solo los
+  suyos. Deliberado dado el círculo pequeño y de confianza de los admins que
+  el propietario elige a mano; si el número de grupos/admins creciera mucho,
+  convendría un admin-por-grupo (campo `admins` en el propio doc del grupo).
+- **Grupo activo por dispositivo**: `src/lib/grupoActivo.ts` guarda la
+  elección en `localStorage`, así que cambiar de grupo en el móvil no se
+  refleja en el portátil. Razonable a esta escala; si molesta, podría
+  guardarse en el propio doc de `amigos` del usuario.
+- **Sin roster compartido entre grupos por invitación cruzada**: hoy
+  cualquier admin ve y puede añadir a cualquier grupo a cualquier amigo del
+  roster global. No hay forma de tener "amigos privados" visibles solo para
+  ciertos admins. No pedido, apuntado por si surge.
+- **Sin registro de quién creó cada grupo**: el doc de `grupos` no guarda un
+  `creadoPor`; con el rol admin siendo global no aporta control de acceso,
+  pero sería un dato de auditoría sencillo de añadir si hiciera falta.
+
 ## Búsqueda y UX (Hito 10)
 
 - **Priorizar coincidencias por prefijo** en el buscador (hoy es

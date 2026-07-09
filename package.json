@@ -10,7 +10,7 @@
     "catalogo:generar": "node scripts/generar-catalogo.mjs",
     "rutas:generar": "node scripts/generar-rutas.mjs",
     "catalogo:importar": "node --env-file=.env.local scripts/importar-firestore.mjs",
-    "invitados:anadir": "node --env-file=.env.local scripts/invitar.mjs",
+    "amigos:anadir": "node --env-file=.env.local scripts/amigo.mjs",
     "iconos:generar": "node scripts/generar-iconos.mjs",
     "test": "vitest run",
     "test:red": "PROBAR_RED=1 vitest run"
