@@ -12,6 +12,7 @@ import { GraficoActividad, type CuboMensual } from "./GraficoActividad";
 import {
   IconoCerrar,
   IconoCollado,
+  IconoDespliegue,
   IconoHecho,
   IconoIbon,
   IconoPapelera,
@@ -72,6 +73,97 @@ function BarraProgreso({
         />
       </div>
     </li>
+  );
+}
+
+/**
+ * Sección plegable: cabecera con título (+ un resumen opcional visible ya
+ * cerrada) que se pliega/despliega, para no dejar el panel entero como un
+ * único div largo con todas las filas y porcentajes a la vez.
+ */
+function Desplegable({
+  titulo,
+  resumen,
+  abiertoInicial = false,
+  primero = false,
+  children,
+}: {
+  titulo: string;
+  resumen?: string;
+  abiertoInicial?: boolean;
+  /** La primera sección del panel no lleva línea separadora por encima. */
+  primero?: boolean;
+  children: React.ReactNode;
+}) {
+  const [abierto, setAbierto] = useState(abiertoInicial);
+  return (
+    <div className={primero ? "" : "border-t border-roca-800 pt-3"}>
+      <button
+        type="button"
+        aria-expanded={abierto}
+        onClick={() => setAbierto((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
+        <span className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
+          {titulo}
+        </span>
+        <span className="flex items-center gap-1.5 text-roca-400">
+          {resumen && <span className="text-[11px]">{resumen}</span>}
+          <IconoDespliegue
+            width={12}
+            height={12}
+            className={`transition-transform ${abierto ? "rotate-180" : ""}`}
+          />
+        </span>
+      </button>
+      {abierto && <div className="mt-2">{children}</div>}
+    </div>
+  );
+}
+
+/**
+ * Reparto por comunidad: en vez de listar las barras de todas a la vez, se
+ * elige una (pestañas) y solo se ve el detalle de esa. Preparado para que el
+ * Hito 22 anide comarcas dentro de la comunidad elegida con el mismo patrón.
+ */
+function PorComunidad({
+  totales,
+  hechos,
+}: {
+  totales: Record<Comunidad, number>;
+  hechos: Record<Comunidad, number>;
+}) {
+  const [seleccion, setSeleccion] = useState<Comunidad>(COMUNIDADES[0].clave);
+  const actual = COMUNIDADES.find((c) => c.clave === seleccion)!;
+  return (
+    <div>
+      <div className="flex flex-wrap gap-1.5" role="tablist">
+        {COMUNIDADES.map(({ clave, etiqueta }) => (
+          <button
+            key={clave}
+            type="button"
+            role="tab"
+            aria-selected={seleccion === clave}
+            onClick={() => setSeleccion(clave)}
+            className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+              seleccion === clave
+                ? "border-ocre-600 bg-ocre-600/20 text-ocre-200"
+                : "border-roca-700 text-hielo-300 hover:text-nieve"
+            }`}
+          >
+            {etiqueta}
+          </button>
+        ))}
+      </div>
+      <ul className="mt-2.5 space-y-2">
+        <BarraProgreso
+          etiqueta={actual.etiqueta}
+          hechos={hechos[seleccion]}
+          total={totales[seleccion]}
+          color="#7fa8b8"
+        />
+      </ul>
+    </div>
   );
 }
 
@@ -272,6 +364,16 @@ export function Progreso({
     totalesPorBanda[BANDAS_ALTITUD.length - 1] -
     hechosPorBanda[BANDAS_ALTITUD.length - 1];
 
+  // Resúmenes de una cifra para mostrar junto al título aunque la sección esté cerrada
+  const totalPropiosGeneral =
+    Object.values(propios).reduce((a, b) => a + b, 0) + rutasPropias;
+  const totalPendientesGeneral =
+    tresmilesPendientes +
+    (TOTALES.collado - (propios.collado ?? 0)) +
+    (TOTALES.ibon - (propios.ibon ?? 0)) +
+    (TOTALES.refugio - (propios.refugio ?? 0)) +
+    (totalRutas - rutasPropias);
+
   // Elementos y rutas de cada comunidad, y cuántos lleva hechos el usuario
   const { totalesPorComunidad, hechosPorComunidad } = useMemo(() => {
     const totales: Record<Comunidad, number> = { aragon: 0, navarra: 0, cataluna: 0 };
@@ -318,11 +420,13 @@ export function Progreso({
       <div className="space-y-4 p-4">
         {usuario ? (
           <>
-            <div>
-              <h3 className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
-                Lo mío
-              </h3>
-              <ul className="mt-2 space-y-2">
+            <Desplegable
+              titulo="Lo mío"
+              resumen={`${totalPropiosGeneral} hechos`}
+              abiertoInicial
+              primero
+            >
+              <ul className="space-y-2">
                 {FILAS_PERSONALES.map(({ categoria, etiqueta }) => (
                   <BarraProgreso
                     key={categoria}
@@ -339,30 +443,14 @@ export function Progreso({
                   color="#3f92c9"
                 />
               </ul>
-            </div>
+            </Desplegable>
 
-            <div className="border-t border-roca-800 pt-3">
-              <h3 className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
-                Por comunidad
-              </h3>
-              <ul className="mt-2 space-y-2">
-                {COMUNIDADES.map(({ clave, etiqueta }) => (
-                  <BarraProgreso
-                    key={clave}
-                    etiqueta={etiqueta}
-                    hechos={hechosPorComunidad[clave]}
-                    total={totalesPorComunidad[clave]}
-                    color="#7fa8b8"
-                  />
-                ))}
-              </ul>
-            </div>
+            <Desplegable titulo="Por comunidad">
+              <PorComunidad totales={totalesPorComunidad} hechos={hechosPorComunidad} />
+            </Desplegable>
 
-            <div className="border-t border-roca-800 pt-3">
-              <h3 className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
-                Picos por altitud
-              </h3>
-              <ul className="mt-2 space-y-2">
+            <Desplegable titulo="Picos por altitud">
+              <ul className="space-y-2">
                 {BANDAS_ALTITUD.map((banda, i) => (
                   <BarraProgreso
                     key={banda.etiqueta}
@@ -373,13 +461,10 @@ export function Progreso({
                   />
                 ))}
               </ul>
-            </div>
+            </Desplegable>
 
-            <div className="border-t border-roca-800 pt-3">
-              <h3 className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
-                Pendientes
-              </h3>
-              <div className="mt-2 grid grid-cols-3 gap-2">
+            <Desplegable titulo="Pendientes" resumen={`${totalPendientesGeneral}`}>
+              <div className="grid grid-cols-3 gap-2">
                 <Pendiente
                   icono={<IconoPico width={16} height={16} />}
                   numero={tresmilesPendientes}
@@ -406,7 +491,7 @@ export function Progreso({
                   etiqueta="Rutas"
                 />
               </div>
-            </div>
+            </Desplegable>
           </>
         ) : (
           <p className="text-xs text-roca-300">
@@ -414,28 +499,25 @@ export function Progreso({
           </p>
         )}
 
-        <div className="border-t border-roca-800 pt-3">
-          <h3 className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
-            Evolución del grupo
-          </h3>
-          <p className="mt-1 text-xs text-roca-300">
+        <Desplegable titulo="Evolución del grupo">
+          <p className="text-xs text-roca-300">
             Actividades marcadas por mes, último año
           </p>
           <div className="mt-2">
             <GraficoActividad meses={meses} />
           </div>
-        </div>
+        </Desplegable>
 
-        <div className="border-t border-roca-800 pt-3">
-          <h3 className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
-            El grupo
-          </h3>
+        <Desplegable
+          titulo="El grupo"
+          resumen={grupo.length > 0 ? `${grupo.length} personas` : undefined}
+        >
           {grupo.length === 0 ? (
-            <p className="mt-2 text-xs text-roca-300">
+            <p className="text-xs text-roca-300">
               Nadie ha marcado nada todavía.
             </p>
           ) : (
-            <ol className="mt-2 space-y-1.5">
+            <ol className="space-y-1.5">
               {grupo.map((miembro, i) => (
                 <li
                   key={miembro.nombre + i}
@@ -461,7 +543,7 @@ export function Progreso({
               ))}
             </ol>
           )}
-        </div>
+        </Desplegable>
 
         {usuario && esInvitado && (
           <SeccionStrava

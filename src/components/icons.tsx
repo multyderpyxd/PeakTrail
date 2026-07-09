@@ -318,6 +318,15 @@ export function IconoLista(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Despliegue de una sección (chevron): apunta hacia abajo, se rota al abrir. */
+export function IconoDespliegue(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <path d="m6 9.5 6 6 6-6" />
+    </Base>
+  );
+}
+
 /** Flechas de ordenación: dos triángulos apilados. */
 export function IconoOrden(props: SVGProps<SVGSVGElement>) {
   return (
