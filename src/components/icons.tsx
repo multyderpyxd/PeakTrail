@@ -101,6 +101,18 @@ export function IconoUsuario(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Grupo de amigos: cordada, tres personas unidas por la cuerda. */
+export function IconoGrupo(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <path d="M6 17 12 7 18 17" />
+      <circle cx="6" cy="17" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="7" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="18" cy="17" r="1.6" fill="currentColor" stroke="none" />
+    </Base>
+  );
+}
+
 /** Progreso: cimas ascendentes conquistadas. */
 export function IconoProgreso(props: SVGProps<SVGSVGElement>) {
   return (

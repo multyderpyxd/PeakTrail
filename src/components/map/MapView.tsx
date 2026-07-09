@@ -1430,6 +1430,8 @@ export default function MapView() {
           usuario={sesion.usuario}
           esInvitado={sesion.invitado}
           esAdmin={sesion.admin}
+          adminGrupos={sesion.adminGrupos}
+          propietario={sesion.propietario}
           rutas={rutasRef.current}
           totalRutas={rutasRef.current?.size ?? 0}
           onCerrar={() => setVerProgreso(false)}

@@ -4,6 +4,23 @@ import type { Comunidad } from "@/types/catalogo";
 import type { Realizado } from "@/lib/realizados";
 import type { ActividadStrava } from "@/lib/strava";
 import { expulsar, invitar, listarInvitados, type Invitado } from "@/lib/invitados";
+import {
+  anadirAmigo,
+  ascenderAdmin,
+  descenderAdmin,
+  listarAmigos,
+  quitarAmigo,
+  type Amigo,
+} from "@/lib/amigos";
+import {
+  anadirMiembro,
+  borrarGrupo,
+  crearGrupo,
+  listarGrupos,
+  quitarMiembro,
+  renombrarGrupo,
+} from "@/lib/grupos";
+import type { Grupo } from "@/types/grupo";
 import type { Ruta } from "@/types/rutas";
 import { SeccionStrava } from "./SeccionStrava";
 import { elementosPorId, TOTALES } from "./elementos";
@@ -268,6 +285,318 @@ function Invitaciones({ emailPropio }: { emailPropio: string }) {
   );
 }
 
+/**
+ * Roster global de amigos (colección `amigos`, sustituye a `invitados`
+ * cuando se corte). El botón «hacer/quitar admin» solo existe en el DOM si
+ * `propietario` es true: ningún admin normal puede ver siquiera el control,
+ * y las reglas de Firestore lo impiden aunque alguien lo forzara a mano.
+ */
+function PanelAmigos({
+  propietario,
+  emailPropio,
+  onCambio,
+}: {
+  propietario: boolean;
+  emailPropio: string;
+  onCambio: (amigos: Amigo[]) => void;
+}) {
+  const [amigos, setAmigos] = useState<Amigo[] | null>(null);
+  const [correo, setCorreo] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    listarAmigos()
+      .then((a) => {
+        setAmigos(a);
+        onCambio(a);
+      })
+      .catch(() => setError(true));
+    // onCambio es estable en la práctica (setState del padre); evitamos reabrir el efecto por su identidad
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function recargar() {
+    const lista = await listarAmigos().catch(() => amigos ?? []);
+    setAmigos(lista);
+    onCambio(lista);
+  }
+
+  async function anadir(e: React.FormEvent) {
+    e.preventDefault();
+    const email = correo.trim().toLowerCase();
+    if (!email.includes("@") || ocupado) return;
+    setOcupado(true);
+    try {
+      await anadirAmigo(email);
+      setCorreo("");
+      await recargar();
+    } catch {
+      setError(true);
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  return (
+    <div className="border-t border-roca-800 pt-3">
+      <h3 className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
+        Amigos
+      </h3>
+      {error && (
+        <p className="mt-2 text-xs text-ocre-400">
+          No se pudo acceder al roster (¿permisos de las reglas?).
+        </p>
+      )}
+      <ul className="mt-2 space-y-1">
+        {amigos?.map((a) => (
+          <li key={a.email} className="flex items-center gap-2 text-xs">
+            <span className="min-w-0 flex-1 truncate text-hielo-200">
+              {a.email}
+              {a.admin && <span className="ml-1.5 text-roca-300">admin</span>}
+            </span>
+            {propietario && a.email !== emailPropio && (
+              <button
+                type="button"
+                onClick={async () => {
+                  await (a.admin ? descenderAdmin(a.email) : ascenderAdmin(a.email)).catch(
+                    () => setError(true),
+                  );
+                  await recargar();
+                }}
+                className="text-[11px] text-roca-300 underline decoration-roca-500 underline-offset-2 transition-colors hover:text-nieve"
+              >
+                {a.admin ? "Quitar admin" : "Hacer admin"}
+              </button>
+            )}
+            {a.email !== emailPropio && (
+              <button
+                type="button"
+                aria-label={`Quitar a ${a.email} del roster`}
+                onClick={async () => {
+                  await quitarAmigo(a.email).catch(() => setError(true));
+                  await recargar();
+                }}
+                className="p-1 text-roca-400 transition-colors hover:text-nieve"
+              >
+                <IconoPapelera width={13} height={13} />
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <form onSubmit={anadir} className="mt-2 flex gap-2">
+        <input
+          type="email"
+          value={correo}
+          onChange={(e) => setCorreo(e.target.value)}
+          placeholder="correo@ejemplo.com"
+          className="min-w-0 flex-1 rounded border border-roca-700 bg-roca-900/70 px-2 py-1 text-xs text-nieve placeholder:text-roca-500 focus:border-ocre-600 focus:outline-none"
+        />
+        <button
+          type="submit"
+          disabled={ocupado}
+          className="rounded bg-ocre-600 px-2.5 py-1 text-xs text-roca-950 transition-colors hover:bg-ocre-400 disabled:opacity-40"
+        >
+          Añadir
+        </button>
+      </form>
+    </div>
+  );
+}
+
+/**
+ * Grupos: crear, renombrar, borrar y gestionar miembros (tomados del roster
+ * de amigos ya cargado por PanelAmigos, para no repetir la consulta).
+ */
+function PanelGrupos({ amigos }: { amigos: Amigo[] | null }) {
+  const [grupos, setGrupos] = useState<Grupo[] | null>(null);
+  const [nombreNuevo, setNombreNuevo] = useState("");
+  const [seleccionNueva, setSeleccionNueva] = useState<Set<string>>(new Set());
+  const [ocupado, setOcupado] = useState(false);
+  const [error, setError] = useState(false);
+  const [editando, setEditando] = useState<string | null>(null);
+  const [nombreEdicion, setNombreEdicion] = useState("");
+
+  useEffect(() => {
+    listarGrupos().then(setGrupos).catch(() => setError(true));
+  }, []);
+
+  async function recargar() {
+    setGrupos(await listarGrupos().catch(() => grupos ?? []));
+  }
+
+  async function crear(e: React.FormEvent) {
+    e.preventDefault();
+    if (!nombreNuevo.trim() || ocupado) return;
+    setOcupado(true);
+    try {
+      await crearGrupo(nombreNuevo.trim(), [...seleccionNueva]);
+      setNombreNuevo("");
+      setSeleccionNueva(new Set());
+      await recargar();
+    } catch {
+      setError(true);
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  return (
+    <div className="border-t border-roca-800 pt-3">
+      <h3 className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
+        Grupos
+      </h3>
+      {error && (
+        <p className="mt-2 text-xs text-ocre-400">
+          No se pudo acceder a los grupos (¿permisos de las reglas?).
+        </p>
+      )}
+      <ul className="mt-2 space-y-2">
+        {grupos?.map((g) => {
+          const disponibles = (amigos ?? []).filter(
+            (a) => !g.miembros.includes(a.email),
+          );
+          return (
+            <li key={g.id} className="rounded border border-roca-800 p-2">
+              <div className="flex items-center gap-2">
+                {editando === g.id ? (
+                  <form
+                    className="flex min-w-0 flex-1 gap-1.5"
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      await renombrarGrupo(g.id, nombreEdicion).catch(() => setError(true));
+                      setEditando(null);
+                      await recargar();
+                    }}
+                  >
+                    <input
+                      autoFocus
+                      value={nombreEdicion}
+                      onChange={(e) => setNombreEdicion(e.target.value)}
+                      className="min-w-0 flex-1 rounded border border-roca-700 bg-roca-900/70 px-1.5 py-0.5 text-xs text-nieve focus:border-ocre-600 focus:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      className="text-[11px] text-ocre-200 hover:text-nieve"
+                    >
+                      Guardar
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditando(g.id);
+                      setNombreEdicion(g.nombre);
+                    }}
+                    className="min-w-0 flex-1 truncate text-left text-xs text-hielo-100 hover:text-nieve"
+                  >
+                    {g.nombre}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  aria-label={`Borrar grupo ${g.nombre}`}
+                  onClick={async () => {
+                    await borrarGrupo(g.id).catch(() => setError(true));
+                    await recargar();
+                  }}
+                  className="p-1 text-roca-400 transition-colors hover:text-nieve"
+                >
+                  <IconoPapelera width={13} height={13} />
+                </button>
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {g.miembros.map((email) => (
+                  <span
+                    key={email}
+                    className="flex items-center gap-1 rounded-full border border-roca-700 px-2 py-0.5 text-[11px] text-hielo-300"
+                  >
+                    {email}
+                    <button
+                      type="button"
+                      aria-label={`Quitar a ${email} de ${g.nombre}`}
+                      onClick={async () => {
+                        await quitarMiembro(g.id, email).catch(() => setError(true));
+                        await recargar();
+                      }}
+                      className="text-roca-400 hover:text-nieve"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                {disponibles.length > 0 && (
+                  <select
+                    defaultValue=""
+                    onChange={async (e) => {
+                      const email = e.target.value;
+                      if (!email) return;
+                      e.target.value = "";
+                      await anadirMiembro(g.id, email).catch(() => setError(true));
+                      await recargar();
+                    }}
+                    className="rounded-full border border-roca-700 bg-roca-900/70 px-2 py-0.5 text-[11px] text-hielo-300 focus:border-ocre-600 focus:outline-none"
+                  >
+                    <option value="">+ añadir…</option>
+                    {disponibles.map((a) => (
+                      <option key={a.email} value={a.email}>
+                        {a.email}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <form onSubmit={crear} className="mt-2 space-y-1.5">
+        <input
+          type="text"
+          value={nombreNuevo}
+          onChange={(e) => setNombreNuevo(e.target.value)}
+          placeholder="Nombre del nuevo grupo"
+          className="w-full rounded border border-roca-700 bg-roca-900/70 px-2 py-1 text-xs text-nieve placeholder:text-roca-500 focus:border-ocre-600 focus:outline-none"
+        />
+        {amigos && amigos.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {amigos.map((a) => (
+              <label
+                key={a.email}
+                className="flex items-center gap-1 rounded-full border border-roca-700 px-2 py-0.5 text-[11px] text-hielo-300"
+              >
+                <input
+                  type="checkbox"
+                  checked={seleccionNueva.has(a.email)}
+                  onChange={(e) => {
+                    setSeleccionNueva((prev) => {
+                      const siguiente = new Set(prev);
+                      if (e.target.checked) siguiente.add(a.email);
+                      else siguiente.delete(a.email);
+                      return siguiente;
+                    });
+                  }}
+                  className="accent-ocre-600"
+                />
+                {a.email}
+              </label>
+            ))}
+          </div>
+        )}
+        <button
+          type="submit"
+          disabled={ocupado || !nombreNuevo.trim()}
+          className="rounded bg-ocre-600 px-2.5 py-1 text-xs text-roca-950 transition-colors hover:bg-ocre-400 disabled:opacity-40"
+        >
+          Crear grupo
+        </button>
+      </form>
+    </div>
+  );
+}
+
 const FILAS_PERSONALES = [
   { categoria: "pico", etiqueta: "Picos" },
   { categoria: "collado", etiqueta: "Collados" },
@@ -280,6 +609,8 @@ export function Progreso({
   usuario,
   esInvitado,
   esAdmin,
+  adminGrupos,
+  propietario,
   rutas,
   totalRutas,
   onCerrar,
@@ -289,11 +620,15 @@ export function Progreso({
   usuario: User | null;
   esInvitado: boolean;
   esAdmin: boolean;
+  /** Admin del sistema de grupos nuevo (roster `amigos`), distinto del `esAdmin` de `invitados`. */
+  adminGrupos: boolean;
+  propietario: boolean;
   rutas: Map<string, Ruta> | null;
   totalRutas: number;
   onCerrar: () => void;
   onActividades?: (todas: ActividadStrava[]) => void;
 }) {
+  const [amigosRoster, setAmigosRoster] = useState<Amigo[] | null>(null);
   const { propios, rutasPropias, hechosPorBanda, grupo } = useMemo(() => {
     const propios: Record<string, number> = { pico: 0, collado: 0, ibon: 0, refugio: 0 };
     const hechosPorBanda = BANDAS_ALTITUD.map(() => 0);
@@ -556,6 +891,17 @@ export function Progreso({
 
         {esAdmin && usuario?.email && (
           <Invitaciones emailPropio={usuario.email.toLowerCase()} />
+        )}
+
+        {adminGrupos && usuario?.email && (
+          <>
+            <PanelAmigos
+              propietario={propietario}
+              emailPropio={usuario.email.toLowerCase()}
+              onCambio={setAmigosRoster}
+            />
+            <PanelGrupos amigos={amigosRoster} />
+          </>
         )}
       </div>
     </section>

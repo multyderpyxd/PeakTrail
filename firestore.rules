@@ -4,6 +4,14 @@ rules_version = '2';
 // (Firestore Database → Reglas) cuando quieras cerrar el modo de prueba.
 // La lista de invitados se gestiona con `npm run invitados:anadir -- email`
 // ANTES de aplicar estas reglas (después, solo desde la consola).
+//
+// Sistema de grupos en construcción (checkpoint 1): `amigos`/`grupos` son
+// colecciones nuevas que conviven con el `invitados` de siempre sin tocarlo;
+// `planes`/`realizados`/`comentarios`/`fotos` siguen en el modelo de grupo
+// único hasta el checkpoint de corte, que los pasará a `grupoId` +
+// miembroDeGrupo() y retirará `invitados`. El email del propietario es una
+// constante fija (sin ruta en la app para crearlo): si cambia, edítalo aquí
+// Y en src/lib/propietario.ts.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -23,6 +31,25 @@ service cloud.firestore {
         get(/databases/$(database)/documents/invitados/$(request.auth.token.email)).data.admin == true;
     }
 
+    function esPropietario() {
+      return autenticado() && request.auth.token.email == "josemiangos@gmail.com";
+    }
+
+    // Admin del sistema de grupos (roster `amigos`, no el `invitados` de arriba).
+    function esAdminGrupos() {
+      return esPropietario() ||
+        (autenticado() &&
+          exists(/databases/$(database)/documents/amigos/$(request.auth.token.email)) &&
+          get(/databases/$(database)/documents/amigos/$(request.auth.token.email)).data.admin == true);
+    }
+
+    function miembroDeGrupo(grupoId) {
+      return autenticado() &&
+        exists(/databases/$(database)/documents/grupos/$(grupoId)) &&
+        request.auth.token.email in
+          get(/databases/$(database)/documents/grupos/$(grupoId)).data.miembros;
+    }
+
     // Catálogo: lectura pública, escritura solo por importación (consola/scripts con reglas abiertas)
     match /elementos/{id} {
       allow read: if true;
@@ -35,6 +62,25 @@ service cloud.firestore {
       allow read: if esAdmin() || (autenticado() && request.auth.token.email == email);
       allow create, update: if esAdmin();
       allow delete: if esAdmin() && request.auth.token.email != email;
+    }
+
+    // Roster global de amigos (reemplaza a `invitados` cuando se corte).
+    // Solo el propietario puede tocar el campo `admin`: un admin no
+    // propietario crea/edita amigos pero nunca asciende ni desciende a nadie.
+    match /amigos/{email} {
+      allow read: if esAdminGrupos() || (autenticado() && request.auth.token.email == email);
+      allow create: if esPropietario() || (esAdminGrupos() && request.resource.data.admin == false);
+      allow update: if esPropietario() || (esAdminGrupos() && request.resource.data.admin == resource.data.admin);
+      allow delete: if esAdminGrupos() && request.auth.token.email != email;
+    }
+
+    // Grupos: cualquier admin/propietario crea, renombra, gestiona
+    // miembros y borra cualquier grupo (rol admin global, no por grupo,
+    // dado el círculo pequeño y de confianza). Un miembro normal solo lee
+    // los grupos a los que pertenece.
+    match /grupos/{grupoId} {
+      allow read: if esAdminGrupos() || (autenticado() && request.auth.token.email in resource.data.miembros);
+      allow create, update, delete: if esAdminGrupos();
     }
 
     // Rutas planificadas: compartidas dentro del grupo
