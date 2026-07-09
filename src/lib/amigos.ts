@@ -23,6 +23,10 @@ export interface Amigo {
   email: string;
   admin: boolean;
   anadidoEl: string | null;
+  /** Uid de Firebase, autorregistrado al entrar; null hasta que entra por primera vez. */
+  uid: string | null;
+  /** Nombre para mostrar, autorregistrado junto al uid. */
+  nombre: string | null;
 }
 
 export async function listarAmigos(): Promise<Amigo[]> {
@@ -35,8 +39,24 @@ export async function listarAmigos(): Promise<Amigo[]> {
         d.data().anadidoEl instanceof Timestamp
           ? d.data().anadidoEl.toDate().toISOString()
           : null,
+      uid: (d.data().uid as string) ?? null,
+      nombre: (d.data().nombre as string) ?? null,
     }))
     .sort((a, b) => a.email.localeCompare(b.email));
+}
+
+/**
+ * Autorregistro de uid/nombre en el propio doc de `amigos`, para que otros
+ * miembros de un grupo compartido puedan resolver tu uid al etiquetarte
+ * como participante de un "lo he hecho". Las reglas solo dejan tocar estos
+ * dos campos (nunca `admin`) y solo en tu propio documento.
+ */
+export async function registrarUid(
+  email: string,
+  uid: string,
+  nombre: string,
+): Promise<void> {
+  await updateDoc(doc(getDb(), "amigos", email), { uid, nombre });
 }
 
 /** Crea (o resetea a no-admin) la ficha de un amigo; no se usa para re-añadir a un admin existente. */

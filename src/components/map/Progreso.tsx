@@ -29,13 +29,13 @@ import {
   IconoCerrar,
   IconoCollado,
   IconoDespliegue,
-  IconoHecho,
   IconoIbon,
   IconoPapelera,
   IconoPico,
   IconoRefugio,
   IconoTrazar,
 } from "@/components/icons";
+import { ModalActividadesGrupo } from "./ModalActividadesGrupo";
 
 /** Bandas de altitud de los picos: mismos cortes que el deslizador del panel de capas. */
 const BANDAS_ALTITUD = [
@@ -587,6 +587,7 @@ export function Progreso({
   onActividades?: (todas: ActividadStrava[]) => void;
 }) {
   const [amigosRoster, setAmigosRoster] = useState<Amigo[] | null>(null);
+  const [verModalActividades, setVerModalActividades] = useState(false);
 
   // "Lo mío": mis realizados, sean individuales o de cualquier grupo.
   const { propios, rutasPropias, hechosPorBanda } = useMemo(() => {
@@ -607,22 +608,6 @@ export function Progreso({
     }
     return { propios, rutasPropias, hechosPorBanda };
   }, [realizadosPropios]);
-
-  // "El grupo": ranking de todo lo compartido con el grupo activo, no lo individual.
-  const grupo = useMemo(() => {
-    const mapa = new Map<string, { nombre: string; total: number; picos: number }>();
-    for (const r of realizadosGrupo.values()) {
-      const datos = mapa.get(r.usuario) ?? {
-        nombre: r.nombreUsuario,
-        total: 0,
-        picos: 0,
-      };
-      datos.total += 1;
-      if (r.categoria === "pico") datos.picos += 1;
-      mapa.set(r.usuario, datos);
-    }
-    return [...mapa.values()].sort((a, b) => b.picos - a.picos || b.total - a.total);
-  }, [realizadosGrupo]);
 
   // Totales por banda de altitud: se recorre el catálogo una sola vez
   const totalesPorBanda = useMemo(() => {
@@ -689,6 +674,7 @@ export function Progreso({
   }, [realizadosPropios, rutas]);
 
   return (
+    <>
     <section
       aria-label="Progreso del grupo"
       className="absolute left-4 top-33 max-h-[calc(100dvh-10rem)] w-88 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border border-roca-700 bg-roca-950/90 shadow-lg shadow-roca-950/60"
@@ -798,42 +784,20 @@ export function Progreso({
           </div>
         </Desplegable>
 
-        <Desplegable
-          titulo={nombreGrupo ?? "El grupo"}
-          resumen={grupo.length > 0 ? `${grupo.length} personas` : undefined}
-        >
-          {grupo.length === 0 ? (
-            <p className="text-xs text-roca-300">
-              Nadie ha marcado nada todavía.
-            </p>
-          ) : (
-            <ol className="space-y-1.5">
-              {grupo.map((miembro, i) => (
-                <li
-                  key={miembro.nombre + i}
-                  className="flex items-center gap-2 text-xs"
-                >
-                  <span className="w-4 text-right font-display text-roca-300">
-                    {i + 1}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-hielo-200">
-                    {miembro.nombre}
-                  </span>
-                  <span className="flex items-center gap-1 text-roca-300">
-                    <span className="font-display text-sm text-nieve">
-                      {miembro.picos}
-                    </span>
-                    picos
-                  </span>
-                  <span className="flex items-center gap-1 text-roca-300">
-                    <IconoHecho width={12} height={12} />
-                    {miembro.total}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          )}
-        </Desplegable>
+        <div className="border-t border-roca-800 pt-3">
+          <button
+            type="button"
+            onClick={() => setVerModalActividades(true)}
+            className="flex w-full items-center justify-between gap-2 rounded border border-roca-700 px-3 py-2 text-xs text-hielo-200 transition-colors hover:border-roca-500 hover:text-nieve"
+          >
+            <span>Actividades de {nombreGrupo ?? "el grupo"}</span>
+            <IconoDespliegue
+              width={12}
+              height={12}
+              className="-rotate-90 text-roca-400"
+            />
+          </button>
+        </div>
 
         {usuario && grupoActivoId && (
           <SeccionStrava
@@ -857,5 +821,13 @@ export function Progreso({
         )}
       </div>
     </section>
+    {verModalActividades && (
+      <ModalActividadesGrupo
+        realizadosGrupo={realizadosGrupo}
+        nombreGrupo={nombreGrupo}
+        onCerrar={() => setVerModalActividades(false)}
+      />
+    )}
+    </>
   );
 }

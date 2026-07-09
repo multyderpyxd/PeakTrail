@@ -66,9 +66,11 @@ import {
   desmarcarRealizado,
   escucharRealizados,
   escucharRealizadosPropios,
-  marcarRealizado,
+  idRealizado,
+  marcarRealizadoGrupo,
   type Realizado,
 } from "@/lib/realizados";
+import { listarAmigos, type Amigo } from "@/lib/amigos";
 import { Explorador } from "./Explorador";
 import { FichaActividad } from "./FichaActividad";
 import { Progreso } from "./Progreso";
@@ -266,7 +268,33 @@ export default function MapView() {
     guardarGrupoActivo(id);
   }
 
-  const nombreGrupoActivo = sesion.grupos.find((g) => g.id === grupoActivoId)?.nombre;
+  const grupoActivoResumen = sesion.grupos.find((g) => g.id === grupoActivoId);
+  const nombreGrupoActivo = grupoActivoResumen?.nombre;
+
+  // Roster de amigos, para resolver nombre/uid de los compañeros del grupo
+  // activo al armar el selector de "también lo hicieron" — se refresca al
+  // cambiar de grupo (no hace falta en vivo: el formulario se abre de cero
+  // cada vez).
+  const [amigosRoster, setAmigosRoster] = useState<Amigo[] | null>(null);
+  useEffect(() => {
+    listarAmigos()
+      .then(setAmigosRoster)
+      .catch(() => setAmigosRoster([]));
+  }, [grupoActivoId]);
+
+  const participantesGrupo = useMemo(() => {
+    if (!grupoActivoResumen || !sesion.usuario?.email) return [];
+    const emailPropio = sesion.usuario.email.toLowerCase();
+    return grupoActivoResumen.miembros
+      .filter((email) => email !== emailPropio)
+      .map((email) => {
+        const amigo = amigosRoster?.find((a) => a.email === email);
+        return { email, nombre: amigo?.nombre ?? null, uid: amigo?.uid ?? null };
+      });
+    // grupoActivoResumen es un objeto nuevo en cada render (se recalcula con
+    // .find sobre sesion.grupos); grupoActivoId es la dependencia estable real
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grupoActivoId, amigosRoster, sesion.usuario?.email]);
 
   useEffect(() => {
     return escucharRealizados(grupoActivoId, setRealizadosGrupo);
@@ -310,20 +338,32 @@ export default function MapView() {
     fecha: string,
     notas: string,
     individual: boolean,
+    participantesUid: string[] = [],
   ) {
     if (!sesion.usuario) return;
-    await marcarRealizado({
-      usuario: sesion.usuario.uid,
-      nombreUsuario:
-        sesion.usuario.displayName ?? sesion.usuario.email ?? "Anónimo",
-      grupoId: individual ? null : grupoActivoId,
-      tipo,
-      refId,
-      nombre,
-      categoria,
-      fecha,
-      notas,
-    });
+    const grupoId = individual ? null : grupoActivoId;
+    const propio = {
+      uid: sesion.usuario.uid,
+      nombre: sesion.usuario.displayName ?? sesion.usuario.email ?? "Anónimo",
+    };
+    // Si alguien etiquetado ya lo tenía marcado él mismo, su alta se
+    // convertiría en un update ajeno que las reglas rechazan: se descarta
+    // aquí para no intentarlo (realizadosGrupo ya está cargado en vivo).
+    const otros = individual
+      ? []
+      : participantesUid
+          .filter(
+            (uid) => !realizadosGrupo.has(idRealizado(uid, grupoId, tipo, refId)),
+          )
+          .map((uid) => {
+            const p = participantesGrupo.find((p) => p.uid === uid);
+            return p?.nombre ? { uid, nombre: p.nombre } : null;
+          })
+          .filter((d): d is { uid: string; nombre: string } => d !== null);
+    await marcarRealizadoGrupo(
+      { grupoId, tipo, refId, nombre, categoria, fecha, notas },
+      [propio, ...otros],
+    );
   }
   const [tiposActivos, setTiposActivos] = useState<TipoElemento[]>([
     "pico",
@@ -1564,9 +1604,19 @@ export default function MapView() {
           realizado={realizadoDe("elemento", seleccion.elemento.id)}
           puedeMarcar={puedeMarcar}
           nombreGrupoActivo={nombreGrupoActivo}
-          onMarcar={(fecha, notas, individual) => {
+          participantesGrupo={participantesGrupo}
+          onMarcar={(fecha, notas, individual, participantesUid) => {
             const el = seleccion.elemento;
-            return marcar("elemento", el.id, el.nombre, el.tipo, fecha, notas, individual);
+            return marcar(
+              "elemento",
+              el.id,
+              el.nombre,
+              el.tipo,
+              fecha,
+              notas,
+              individual,
+              participantesUid,
+            );
           }}
           onDesmarcar={async () => {
             const r = realizadoDe("elemento", seleccion.elemento.id);
@@ -1593,7 +1643,8 @@ export default function MapView() {
           realizado={realizadoDe("ruta", rutaVista.id)}
           puedeMarcar={puedeMarcar}
           nombreGrupoActivo={nombreGrupoActivo}
-          onMarcar={(fecha, notas, individual) =>
+          participantesGrupo={participantesGrupo}
+          onMarcar={(fecha, notas, individual, participantesUid) =>
             marcar(
               "ruta",
               rutaVista.id,
@@ -1602,6 +1653,7 @@ export default function MapView() {
               fecha,
               notas,
               individual,
+              participantesUid,
             )
           }
           onDesmarcar={async () => {

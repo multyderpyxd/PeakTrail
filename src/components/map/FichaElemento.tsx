@@ -3,7 +3,7 @@ import type { Realizado } from "@/lib/realizados";
 import type { User } from "firebase/auth";
 import { BotonCompartir } from "./BotonCompartir";
 import { COLOR_TIPO } from "./marcadores";
-import { MarcarRealizado } from "./MarcarRealizado";
+import { MarcarRealizado, type ParticipanteGrupo } from "./MarcarRealizado";
 import { Meteo } from "./Meteo";
 import { SeccionSocial } from "./SeccionSocial";
 import { SeccionWikipedia } from "./SeccionWikipedia";
@@ -39,6 +39,7 @@ export function FichaElemento({
   realizado,
   puedeMarcar,
   nombreGrupoActivo,
+  participantesGrupo,
   onMarcar,
   onDesmarcar,
   usuario,
@@ -49,7 +50,13 @@ export function FichaElemento({
   realizado: Realizado | null;
   puedeMarcar: boolean;
   nombreGrupoActivo?: string | null;
-  onMarcar: (fecha: string, notas: string, individual: boolean) => Promise<void>;
+  participantesGrupo?: ParticipanteGrupo[];
+  onMarcar: (
+    fecha: string,
+    notas: string,
+    individual: boolean,
+    participantesUid: string[],
+  ) => Promise<void>;
   onDesmarcar: () => Promise<void>;
   usuario: User | null;
   grupoId: string | null;
@@ -135,6 +142,7 @@ export function FichaElemento({
           realizado={realizado}
           puedeMarcar={puedeMarcar}
           nombreGrupoActivo={nombreGrupoActivo}
+          participantesGrupo={participantesGrupo}
           onMarcar={onMarcar}
           onDesmarcar={onDesmarcar}
         />

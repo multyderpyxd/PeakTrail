@@ -48,13 +48,21 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Roster global de amigos. Solo el propietario puede tocar el campo
-    // `admin`: un admin no propietario crea/edita amigos pero nunca
-    // asciende ni desciende a nadie.
+    // Roster global de amigos: cualquier amigo puede leer a los demás (hace
+    // falta para resolver nombre/uid de los compañeros de grupo al marcar
+    // participantes; el documento no lleva nada sensible). Solo el
+    // propietario puede tocar el campo `admin`: un admin no propietario
+    // crea/edita amigos pero nunca asciende ni desciende a nadie. Cada uno
+    // puede autorregistrar su propio uid/nombre (para que le puedan
+    // etiquetar como participante), nunca el campo `admin`.
     match /amigos/{email} {
-      allow read: if esAdmin() || (autenticado() && request.auth.token.email == email);
+      allow read: if esAmigo();
       allow create: if esPropietario() || (esAdmin() && request.resource.data.admin == false);
-      allow update: if esPropietario() || (esAdmin() && request.resource.data.admin == resource.data.admin);
+      allow update: if esPropietario() ||
+        (esAdmin() && request.resource.data.admin == resource.data.admin) ||
+        (autenticado() && request.auth.token.email == email &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(["uid", "nombre"]) &&
+          request.resource.data.uid == request.auth.uid);
       allow delete: if esAdmin() && request.auth.token.email != email;
     }
 
@@ -74,13 +82,25 @@ service cloud.firestore {
       allow update, delete: if miembroDeGrupo(resource.data.grupoId);
     }
 
-    // Registro de realizados: cada uno escribe lo suyo. Con grupo (grupoId
-    // no nulo), todo el grupo lo ve; individual (grupoId nulo), solo el
-    // propio autor puede leerlo, tenga o no grupoId.
+    // Registro de realizados: con grupo (grupoId no nulo), todo el grupo lo
+    // ve; individual (grupoId nulo), solo el propio autor puede leerlo.
+    // Al crear uno de grupo, cualquier miembro puede hacerlo a nombre de
+    // cualquier uid (para etiquetar participantes): no se verifica que ese
+    // uid sea realmente de alguien del grupo (las reglas no pueden buscar
+    // qué email es dueño de un uid, solo leer por ruta conocida) — mismo
+    // criterio ya aceptado en comentarios/fotos para esta escala de grupo
+    // pequeño y de confianza. Editar/borrar siempre exige ser el dueño real
+    // del documento, así que cada uno gestiona solo el suyo.
     match /realizados/{id} {
       allow read: if (resource.data.grupoId != null && miembroDeGrupo(resource.data.grupoId)) ||
         (autenticado() && resource.data.usuario == request.auth.uid);
-      allow create, update: if request.resource.data.usuario == request.auth.uid &&
+      allow create: if
+        (request.resource.data.grupoId == null &&
+          request.resource.data.usuario == request.auth.uid && esAmigo()) ||
+        (request.resource.data.grupoId != null &&
+          miembroDeGrupo(request.resource.data.grupoId));
+      allow update: if resource.data.usuario == request.auth.uid &&
+        request.resource.data.usuario == request.auth.uid &&
         (
           (request.resource.data.grupoId == null && esAmigo()) ||
           (request.resource.data.grupoId != null && miembroDeGrupo(request.resource.data.grupoId))

@@ -52,7 +52,11 @@ export function escucharGruposDe(
     query(collection(getDb(), COLECCION), where("miembros", "array-contains", email)),
     (captura) => {
       const grupos = captura.docs
-        .map((d) => ({ id: d.id, nombre: d.data().nombre as string }))
+        .map((d) => ({
+          id: d.id,
+          nombre: d.data().nombre as string,
+          miembros: (d.data().miembros as string[]) ?? [],
+        }))
         .sort((a, b) => a.nombre.localeCompare(b.nombre));
       alCambiar(grupos);
     },

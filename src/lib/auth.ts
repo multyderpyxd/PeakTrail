@@ -10,6 +10,7 @@ import {
 } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { getDb, getFirebaseAuth, isFirebaseConfigured } from "./firebase";
+import { registrarUid } from "./amigos";
 import { escucharGruposDe } from "./grupos";
 import { esPropietario } from "./propietario";
 import type { GrupoResumen } from "@/types/grupo";
@@ -81,6 +82,16 @@ export function useUsuario(): EstadoUsuario {
             amigo: propietario || ficha.exists(),
             admin: propietario || esAdminAmigo,
           }));
+          // Autorregistro de uid/nombre: para que otros del grupo puedan
+          // etiquetarte como participante. Solo escribe si hace falta (tras
+          // escribir, este mismo onSnapshot vuelve a dispararse ya con los
+          // valores coincidentes, así que no se repite).
+          if (ficha.exists()) {
+            const nombreActual = usuario.displayName ?? usuario.email ?? "Anónimo";
+            if (ficha.data()?.uid !== usuario.uid || ficha.data()?.nombre !== nombreActual) {
+              registrarUid(email, usuario.uid, nombreActual).catch(() => {});
+            }
+          }
         },
         () => {
           // sin permiso o sin red: se queda con los valores por defecto

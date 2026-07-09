@@ -10,8 +10,13 @@ export interface Grupo {
   creadoEl: string | null;
 }
 
-/** Forma reducida usada para el selector de grupo activo. */
+/**
+ * Forma reducida usada para el selector de grupo activo; incluye
+ * `miembros` (emails) para poder armar el selector de participantes al
+ * marcar "lo he hecho" sin una consulta aparte.
+ */
 export interface GrupoResumen {
   id: string;
   nombre: string;
+  miembros: string[];
 }

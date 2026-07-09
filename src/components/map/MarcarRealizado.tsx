@@ -14,17 +14,28 @@ function fechaLegible(iso: string): string {
   });
 }
 
+/** Compañero del grupo activo, para etiquetarlo como participante al marcar. */
+export interface ParticipanteGrupo {
+  email: string;
+  nombre: string | null;
+  /** null hasta que esa persona entra a la app por primera vez tras este hito. */
+  uid: string | null;
+}
+
 /**
  * Bloque de "lo he hecho" común a las fichas de elemento y de ruta:
- * sin sesión muestra una pista, con sesión permite marcar con fecha, notas
- * y si compartirlo con el grupo activo o guardarlo como logro individual
- * (por defecto se comparte; el aviso bajo la casilla deja claro qué va a
- * pasar), y si ya está marcado enseña el registro y permite desmarcarlo.
+ * sin sesión muestra una pista, con sesión permite marcar con fecha, notas,
+ * a quién más del grupo etiquetar como participante (si no es individual:
+ * cada uno se lleva su propio registro) y si compartirlo con el grupo
+ * activo o guardarlo como logro individual (por defecto se comparte; el
+ * aviso bajo la casilla deja claro qué va a pasar), y si ya está marcado
+ * enseña el registro y permite desmarcarlo.
  */
 export function MarcarRealizado({
   realizado,
   puedeMarcar,
   nombreGrupoActivo,
+  participantesGrupo,
   onMarcar,
   onDesmarcar,
 }: {
@@ -33,13 +44,21 @@ export function MarcarRealizado({
   puedeMarcar: boolean;
   /** Nombre del grupo activo; null/undefined si no hay ninguno (fuerza individual). */
   nombreGrupoActivo?: string | null;
-  onMarcar: (fecha: string, notas: string, individual: boolean) => Promise<void>;
+  /** Resto de miembros del grupo activo, para el selector de participantes. */
+  participantesGrupo?: ParticipanteGrupo[];
+  onMarcar: (
+    fecha: string,
+    notas: string,
+    individual: boolean,
+    participantesUid: string[],
+  ) => Promise<void>;
   onDesmarcar: () => Promise<void>;
 }) {
   const [abierto, setAbierto] = useState(false);
   const [fecha, setFecha] = useState(fechaHoy);
   const [notas, setNotas] = useState("");
   const [individual, setIndividual] = useState(false);
+  const [participantes, setParticipantes] = useState<Set<string>>(new Set());
   const [guardando, setGuardando] = useState(false);
 
   if (!puedeMarcar && !realizado) return null;
@@ -97,10 +116,11 @@ export function MarcarRealizado({
         e.preventDefault();
         setGuardando(true);
         try {
-          await onMarcar(fecha, notas.trim(), seGuardaIndividual);
+          await onMarcar(fecha, notas.trim(), seGuardaIndividual, [...participantes]);
           setAbierto(false);
           setNotas("");
           setIndividual(false);
+          setParticipantes(new Set());
         } finally {
           setGuardando(false);
         }
@@ -140,6 +160,44 @@ export function MarcarRealizado({
           />
           Marcar como individual (no se comparte con el grupo)
         </label>
+      )}
+      {!seGuardaIndividual && (participantesGrupo?.length ?? 0) > 0 && (
+        <div className="space-y-1">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-roca-300">
+            También lo hicieron
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {participantesGrupo!.map((p) => (
+              <label
+                key={p.email}
+                className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${
+                  p.uid
+                    ? "border-roca-700 text-hielo-300"
+                    : "border-roca-800 text-roca-500"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  disabled={!p.uid}
+                  checked={p.uid ? participantes.has(p.uid) : false}
+                  onChange={(e) => {
+                    if (!p.uid) return;
+                    const uid = p.uid;
+                    setParticipantes((prev) => {
+                      const siguiente = new Set(prev);
+                      if (e.target.checked) siguiente.add(uid);
+                      else siguiente.delete(uid);
+                      return siguiente;
+                    });
+                  }}
+                  className="accent-ocre-600"
+                />
+                {p.nombre ?? p.email}
+                {!p.uid && " (aún no ha entrado a la app)"}
+              </label>
+            ))}
+          </div>
+        </div>
       )}
       <p className="text-[11px] text-roca-400">
         {seGuardaIndividual

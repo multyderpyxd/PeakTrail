@@ -64,6 +64,26 @@ export async function desmarcarRealizado(id: string): Promise<void> {
   await deleteDoc(doc(getDb(), "realizados", id));
 }
 
+/**
+ * Marca lo mismo (grupoId/tipo/refId/fecha/notas) para varios destinatarios
+ * a la vez: uno mismo y, si se etiquetan, otros miembros del grupo. Cada
+ * destinatario obtiene su propio documento independiente (id determinista
+ * por uid), así que desmarcarlo luego no afecta a los demás. `allSettled`
+ * para que un destinatario fallido (p. ej. ya lo tenía marcado él mismo, lo
+ * que convierte el alta en una actualización que las reglas rechazan) no
+ * tumbe el resto.
+ */
+export async function marcarRealizadoGrupo(
+  base: Omit<Realizado, "id" | "usuario" | "nombreUsuario">,
+  destinatarios: { uid: string; nombre: string }[],
+): Promise<PromiseSettledResult<void>[]> {
+  return Promise.allSettled(
+    destinatarios.map((d) =>
+      marcarRealizado({ ...base, usuario: d.uid, nombreUsuario: d.nombre }),
+    ),
+  );
+}
+
 /** Escucha en vivo los realizados del grupo activo; sin grupo, no se suscribe. */
 export function escucharRealizados(
   grupoId: string | null,
