@@ -89,8 +89,13 @@ service cloud.firestore {
     // uid sea realmente de alguien del grupo (las reglas no pueden buscar
     // qué email es dueño de un uid, solo leer por ruta conocida) — mismo
     // criterio ya aceptado en comentarios/fotos para esta escala de grupo
-    // pequeño y de confianza. Editar/borrar siempre exige ser el dueño real
-    // del documento, así que cada uno gestiona solo el suyo.
+    // pequeño y de confianza. Editar uno individual sigue siendo solo del
+    // dueño; editar uno de grupo se amplía con el mismo criterio de
+    // confianza que crear: cualquier miembro del grupo puede añadirle una
+    // repetición (historial/fecha/notas), pero no reasignarlo a otra
+    // persona o elemento (usuario/grupoId/tipo/refId/nombre/categoria
+    // deben quedar igual). Borrar siempre exige ser el dueño real: en la UI
+    // "Desmarcar" solo actúa sobre el propio registro de quien lo pulsa.
     match /realizados/{id} {
       allow read: if (resource.data.grupoId != null && miembroDeGrupo(resource.data.grupoId)) ||
         (autenticado() && resource.data.usuario == request.auth.uid);
@@ -99,12 +104,19 @@ service cloud.firestore {
           request.resource.data.usuario == request.auth.uid && esAmigo()) ||
         (request.resource.data.grupoId != null &&
           miembroDeGrupo(request.resource.data.grupoId));
-      allow update: if resource.data.usuario == request.auth.uid &&
-        request.resource.data.usuario == request.auth.uid &&
-        (
-          (request.resource.data.grupoId == null && esAmigo()) ||
-          (request.resource.data.grupoId != null && miembroDeGrupo(request.resource.data.grupoId))
-        );
+      allow update: if
+        (resource.data.grupoId == null &&
+          resource.data.usuario == request.auth.uid &&
+          request.resource.data.usuario == request.auth.uid &&
+          esAmigo()) ||
+        (resource.data.grupoId != null &&
+          miembroDeGrupo(resource.data.grupoId) &&
+          request.resource.data.usuario == resource.data.usuario &&
+          request.resource.data.grupoId == resource.data.grupoId &&
+          request.resource.data.tipo == resource.data.tipo &&
+          request.resource.data.refId == resource.data.refId &&
+          request.resource.data.nombre == resource.data.nombre &&
+          request.resource.data.categoria == resource.data.categoria);
       allow delete: if autenticado() && resource.data.usuario == request.auth.uid;
     }
 

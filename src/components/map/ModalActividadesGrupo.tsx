@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { Realizado } from "@/lib/realizados";
+import { historialDe, type Realizado } from "@/lib/realizados";
 import { COLOR_TIPO } from "./marcadores";
 import { COLOR_RED } from "./rutas";
 import {
@@ -49,7 +49,7 @@ interface Actividad {
   muestra: Realizado;
   nombre: string;
   ultimaFecha: string;
-  participantes: { nombre: string; fecha: string }[];
+  participantes: { nombre: string; fechas: string[] }[];
 }
 
 /**
@@ -72,13 +72,17 @@ export function ModalActividadesGrupo({
   const { actividades, resumenPersonas } = useMemo(() => {
     const porClave = new Map<
       string,
-      { muestra: Realizado; nombre: string; participantes: { nombre: string; fecha: string }[] }
+      { muestra: Realizado; nombre: string; participantes: { nombre: string; fechas: string[] }[] }
     >();
     const porPersona = new Map<string, number>();
     for (const r of realizadosGrupo.values()) {
       const clave = `${r.tipo}__${r.refId}`;
       const entrada = porClave.get(clave) ?? { muestra: r, nombre: r.nombre, participantes: [] };
-      entrada.participantes.push({ nombre: r.nombreUsuario, fecha: r.fecha });
+      const fechas = historialDe(r)
+        .map((h) => h.fecha)
+        .sort()
+        .reverse();
+      entrada.participantes.push({ nombre: r.nombreUsuario, fechas });
       porClave.set(clave, entrada);
       porPersona.set(r.nombreUsuario, (porPersona.get(r.nombreUsuario) ?? 0) + 1);
     }
@@ -86,8 +90,8 @@ export function ModalActividadesGrupo({
       clave,
       muestra: a.muestra,
       nombre: a.nombre,
-      participantes: a.participantes.sort((x, y) => (x.fecha < y.fecha ? 1 : -1)),
-      ultimaFecha: a.participantes.reduce((max, p) => (p.fecha > max ? p.fecha : max), ""),
+      participantes: a.participantes.sort((x, y) => (x.fechas[0] < y.fechas[0] ? 1 : -1)),
+      ultimaFecha: a.participantes.reduce((max, p) => (p.fechas[0] > max ? p.fechas[0] : max), ""),
     }));
     actividades.sort((a, b) => (a.ultimaFecha < b.ultimaFecha ? 1 : -1));
     const resumenPersonas = [...porPersona.entries()].sort((a, b) => b[1] - a[1]);
@@ -185,7 +189,9 @@ export function ModalActividadesGrupo({
                           className="rounded-full border border-roca-700 px-2 py-0.5 text-[11px] text-roca-300"
                         >
                           <span className="text-hielo-200">{p.nombre}</span>{" "}
-                          {fechaCorta(p.fecha)}
+                          {p.fechas.length > 1
+                            ? `×${p.fechas.length} · ${p.fechas.map(fechaCorta).join(", ")}`
+                            : fechaCorta(p.fechas[0])}
                         </li>
                       ))}
                     </ul>

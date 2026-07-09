@@ -1,4 +1,5 @@
 import {
+  arrayUnion,
   collection,
   deleteDoc,
   doc,
@@ -6,17 +7,27 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
   type Unsubscribe,
 } from "firebase/firestore";
 import { getDb } from "./firebase";
+
+/** Una repetición del historial de un "realizado": fecha y notas de esa vez. */
+export interface RepeticionHistorial {
+  fecha: string;
+  notas: string;
+}
 
 /**
  * Registro de "lo he hecho": un documento por usuario, grupo (o individual,
  * sin grupo) y elemento/ruta, con id determinista para que marcar/desmarcar
  * sea idempotente. Con grupo, todo el grupo lo ve (reglas de firestore.rules
  * vía miembroDeGrupo); sin grupo (individual, `grupoId: null`) es solo tuyo.
- * Cada uno escribe/borra solo lo suyo, tenga grupo o no.
+ * Cada uno escribe/borra solo lo suyo, tenga grupo o no; para uno de grupo,
+ * cualquier miembro puede añadirle una repetición (ver `anadirRepeticion`).
+ * `fecha`/`notas` a nivel superior siempre reflejan la repetición más
+ * reciente (para no tener que tocar el código que ya los lee así).
  */
 export interface Realizado {
   id: string;
@@ -30,9 +41,24 @@ export interface Realizado {
   nombre: string;
   /** pico | ibon | refugio | collado para elementos; gr | pr | sl para rutas; plan. */
   categoria: string;
-  /** Fecha de la actividad, YYYY-MM-DD. */
+  /** Fecha de la repetición más reciente, YYYY-MM-DD. */
   fecha: string;
   notas?: string;
+  /**
+   * Todas las veces que se ha hecho, más antigua primero. Opcional: los
+   * documentos de antes de este campo no lo tienen (usar `historialDe`).
+   */
+  historial?: RepeticionHistorial[];
+}
+
+/** Historial completo de un realizado, con respaldo para documentos antiguos sin el campo. */
+export function historialDe(r: Realizado): RepeticionHistorial[] {
+  return r.historial ?? [{ fecha: r.fecha, notas: r.notas ?? "" }];
+}
+
+/** Cuántas veces se ha hecho (1 si no hay repeticiones). */
+export function vecesRealizado(r: Realizado): number {
+  return historialDe(r).length;
 }
 
 /**
@@ -53,15 +79,55 @@ export async function marcarRealizado(
   datos: Omit<Realizado, "id">,
 ): Promise<void> {
   const id = idRealizado(datos.usuario, datos.grupoId, datos.tipo, datos.refId);
+  const notas = datos.notas ?? "";
   await setDoc(doc(getDb(), "realizados", id), {
     ...datos,
-    notas: datos.notas ?? "",
+    notas,
+    historial: [{ fecha: datos.fecha, notas }],
     creadoEl: serverTimestamp(),
   });
 }
 
 export async function desmarcarRealizado(id: string): Promise<void> {
   await deleteDoc(doc(getDb(), "realizados", id));
+}
+
+/**
+ * Añade una repetición a un realizado que ya existe (de uno mismo o, si es
+ * de grupo, de otro miembro: firestore.rules lo permite igual que ya
+ * permite crearlo en su nombre). `fecha`/`notas` de nivel superior pasan a
+ * reflejar esta nueva repetición, la más reciente.
+ */
+export async function anadirRepeticion(
+  id: string,
+  fecha: string,
+  notas: string,
+): Promise<void> {
+  const entrada: RepeticionHistorial = { fecha, notas: notas ?? "" };
+  await updateDoc(doc(getDb(), "realizados", id), {
+    historial: arrayUnion(entrada),
+    fecha: entrada.fecha,
+    notas: entrada.notas,
+  });
+}
+
+/**
+ * Quita solo la repetición más reciente; si era la única, borra el
+ * documento entero (mismo efecto que desmarcarRealizado hoy).
+ */
+export async function quitarUltimaRepeticion(r: Realizado): Promise<void> {
+  const historial = historialDe(r);
+  if (historial.length <= 1) {
+    await desmarcarRealizado(r.id);
+    return;
+  }
+  const restante = historial.slice(0, -1);
+  const ultimo = restante[restante.length - 1];
+  await updateDoc(doc(getDb(), "realizados", r.id), {
+    historial: restante,
+    fecha: ultimo.fecha,
+    notas: ultimo.notas,
+  });
 }
 
 /**

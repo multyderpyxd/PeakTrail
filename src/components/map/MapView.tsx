@@ -63,11 +63,12 @@ import {
 import type { RutaPlaneada, Waypoint } from "@/types/plan";
 import { entrar, salir, useUsuario } from "@/lib/auth";
 import {
-  desmarcarRealizado,
+  anadirRepeticion,
   escucharRealizados,
   escucharRealizadosPropios,
   idRealizado,
   marcarRealizadoGrupo,
+  quitarUltimaRepeticion,
   type Realizado,
 } from "@/lib/realizados";
 import { listarAmigos, type Amigo } from "@/lib/amigos";
@@ -348,28 +349,48 @@ export default function MapView() {
   ) {
     if (!sesion.usuario) return;
     const grupoId = individual ? null : grupoActivoId;
-    const propio = {
-      uid: sesion.usuario.uid,
-      nombre: sesion.usuario.displayName ?? sesion.usuario.email ?? "Anónimo",
-    };
-    // Si alguien etiquetado ya lo tenía marcado él mismo, su alta se
-    // convertiría en un update ajeno que las reglas rechazan: se descarta
-    // aquí para no intentarlo (realizadosGrupo ya está cargado en vivo).
+    const uidPropio = sesion.usuario.uid;
+    const idPropio = idRealizado(uidPropio, grupoId, tipo, refId);
+    // Ya existe un registro para este destinatario (uno mismo, o un
+    // compañero etiquetado): en vez de crear (lo rechazarían las reglas
+    // como update ajeno para un tercero) se le añade una repetición.
+    const existentePropio = individual
+      ? realizadosPropios.get(idPropio)
+      : realizadosGrupo.get(idPropio);
+
     const otros = individual
       ? []
       : participantesUid
-          .filter(
-            (uid) => !realizadosGrupo.has(idRealizado(uid, grupoId, tipo, refId)),
-          )
           .map((uid) => {
             const p = participantesGrupo.find((p) => p.uid === uid);
             return p?.nombre ? { uid, nombre: p.nombre } : null;
           })
           .filter((d): d is { uid: string; nombre: string } => d !== null);
-    await marcarRealizadoGrupo(
-      { grupoId, tipo, refId, nombre, categoria, fecha, notas },
-      [propio, ...otros],
-    );
+
+    const nuevos: { uid: string; nombre: string }[] = [];
+    const repeticiones: string[] = [];
+    if (existentePropio) repeticiones.push(idPropio);
+    else {
+      nuevos.push({
+        uid: uidPropio,
+        nombre: sesion.usuario.displayName ?? sesion.usuario.email ?? "Anónimo",
+      });
+    }
+    for (const o of otros) {
+      const id = idRealizado(o.uid, grupoId, tipo, refId);
+      if (realizadosGrupo.has(id)) repeticiones.push(id);
+      else nuevos.push(o);
+    }
+
+    await Promise.all([
+      nuevos.length
+        ? marcarRealizadoGrupo(
+            { grupoId, tipo, refId, nombre, categoria, fecha, notas },
+            nuevos,
+          )
+        : Promise.resolve([]),
+      Promise.allSettled(repeticiones.map((id) => anadirRepeticion(id, fecha, notas))),
+    ]);
   }
   const [tiposActivos, setTiposActivos] = useState<TipoElemento[]>([
     "pico",
@@ -1626,7 +1647,7 @@ export default function MapView() {
           }}
           onDesmarcar={async () => {
             const r = realizadoDe("elemento", seleccion.elemento.id);
-            if (r) await desmarcarRealizado(r.id);
+            if (r) await quitarUltimaRepeticion(r);
           }}
           usuario={sesion.usuario}
           grupoId={grupoActivoId}
@@ -1664,7 +1685,7 @@ export default function MapView() {
           }
           onDesmarcar={async () => {
             const r = realizadoDe("ruta", rutaVista.id);
-            if (r) await desmarcarRealizado(r.id);
+            if (r) await quitarUltimaRepeticion(r);
           }}
           usuario={sesion.usuario}
           grupoId={grupoActivoId}
