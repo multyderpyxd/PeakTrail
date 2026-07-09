@@ -26,6 +26,14 @@ export interface EstadoUsuario {
   propietario: boolean;
   /** Grupos de los que es miembro. */
   grupos: GrupoResumen[];
+  /**
+   * true en cuanto `grupos` refleja la primera respuesta real de Firestore
+   * (aunque sea una lista vacía). Antes de eso, `grupos` está vacío solo
+   * porque todavía no ha llegado nada, no porque no pertenezca a ninguno:
+   * quien hidrate el grupo activo a partir de `grupos` debe esperar a este
+   * flag para no confundir "aún no ha llegado" con "no está en ninguno".
+   */
+  gruposListos: boolean;
 }
 
 const ESTADO_VACIO: Omit<EstadoUsuario, "cargando" | "usuario"> = {
@@ -33,6 +41,7 @@ const ESTADO_VACIO: Omit<EstadoUsuario, "cargando" | "usuario"> = {
   admin: false,
   propietario: false,
   grupos: [],
+  gruposListos: true,
 };
 
 /**
@@ -71,6 +80,7 @@ export function useUsuario(): EstadoUsuario {
         admin: propietario,
         propietario,
         grupos: [],
+        gruposListos: false,
       });
 
       dejarAmigo = onSnapshot(
@@ -98,7 +108,7 @@ export function useUsuario(): EstadoUsuario {
         },
       );
       dejarGrupos = escucharGruposDe(email, (grupos) => {
-        setEstado((actual) => ({ ...actual, grupos }));
+        setEstado((actual) => ({ ...actual, grupos, gruposListos: true }));
       });
     });
 

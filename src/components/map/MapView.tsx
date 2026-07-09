@@ -255,13 +255,19 @@ export default function MapView() {
   // sesión resuelve, validándolo contra los grupos reales (puede haber
   // cambiado de dispositivo, o haber sido expulsado de ese grupo mientras
   // tanto); si no hay ninguno guardado o ya no es válido, cae al primero.
+  // Ojo: espera a `gruposListos`, no solo a `!cargando` — `cargando` pasa a
+  // false de forma síncrona antes de que la consulta de grupos (asíncrona)
+  // resuelva, así que `sesion.grupos` puede estar vacío solo porque aún no
+  // ha llegado nada (sobre todo en una cuenta sin caché local todavía, p.
+  // ej. la primera vez que entra un amigo recién añadido); hidratar con ese
+  // vacío dejaba `grupoActivoId` en null para siempre, sin grupo real.
   useEffect(() => {
-    if (sesion.cargando || grupoHidratado.current) return;
+    if (sesion.cargando || !sesion.gruposListos || grupoHidratado.current) return;
     grupoHidratado.current = true;
     const guardado = leerGrupoActivo();
     const valido = sesion.grupos.some((g) => g.id === guardado);
     setGrupoActivoId(valido ? guardado : (sesion.grupos[0]?.id ?? null));
-  }, [sesion.cargando, sesion.grupos]);
+  }, [sesion.cargando, sesion.gruposListos, sesion.grupos]);
 
   function elegirGrupoActivo(id: string | null) {
     setGrupoActivoId(id);
