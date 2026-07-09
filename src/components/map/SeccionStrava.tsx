@@ -3,11 +3,7 @@ import type { User } from "firebase/auth";
 import { borrarActividades, sincronizarActividades } from "@/lib/actividades";
 import { decodificarPolilinea, emparejarTraza } from "@/lib/emparejar";
 import { isFirebaseConfigured, listarPlanes } from "@/lib/planes";
-import {
-  idRealizado,
-  marcarRealizado,
-  type Realizado,
-} from "@/lib/realizados";
+import { marcarRealizado, type Realizado } from "@/lib/realizados";
 import {
   conectarStrava,
   conexionStrava,
@@ -30,13 +26,14 @@ import { useConexion } from "@/lib/conexion";
 export function SeccionStrava({
   usuario,
   grupoId,
-  realizados,
+  realizadosPropios,
   rutas,
   onActividades,
 }: {
   usuario: User;
   grupoId: string;
-  realizados: Map<string, Realizado>;
+  /** Mi histórico completo (individual + cualquier grupo), para no re-marcar algo ya hecho. */
+  realizadosPropios: Map<string, Realizado>;
   rutas: Map<string, Ruta> | null;
   onActividades?: (todas: ActividadStrava[]) => void;
 }) {
@@ -64,6 +61,10 @@ export function SeccionStrava({
       const planes = isFirebaseConfigured
         ? await listarPlanes(grupoId).catch(() => [])
         : [];
+      // Ya hecho en cualquier grupo o individualmente: no re-marcar.
+      const yaHechos = new Set(
+        [...realizadosPropios.values()].map((r) => `${r.tipo}__${r.refId}`),
+      );
 
       let novedades = 0;
       for (const actividad of nuevas) {
@@ -104,10 +105,8 @@ export function SeccionStrava({
           })),
         ];
         for (const nuevo of nuevos) {
-          if (
-            realizados.has(idRealizado(usuario.uid, grupoId, nuevo.tipo, nuevo.refId))
-          )
-            continue;
+          const clave = `${nuevo.tipo}__${nuevo.refId}`;
+          if (yaHechos.has(clave)) continue;
           await marcarRealizado({
             usuario: usuario.uid,
             nombreUsuario: usuario.displayName ?? usuario.email ?? "Anónimo",
@@ -116,6 +115,7 @@ export function SeccionStrava({
             fecha: actividad.fecha,
             notas: `Strava: ${actividad.nombre}`,
           });
+          yaHechos.add(clave);
           novedades += 1;
         }
       }

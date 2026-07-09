@@ -16,24 +16,30 @@ function fechaLegible(iso: string): string {
 
 /**
  * Bloque de "lo he hecho" común a las fichas de elemento y de ruta:
- * sin sesión muestra una pista, con sesión permite marcar con fecha y
- * notas, y si ya está marcado enseña el registro y permite desmarcarlo.
+ * sin sesión muestra una pista, con sesión permite marcar con fecha, notas
+ * y si compartirlo con el grupo activo o guardarlo como logro individual
+ * (por defecto se comparte; el aviso bajo la casilla deja claro qué va a
+ * pasar), y si ya está marcado enseña el registro y permite desmarcarlo.
  */
 export function MarcarRealizado({
   realizado,
   puedeMarcar,
+  nombreGrupoActivo,
   onMarcar,
   onDesmarcar,
 }: {
   realizado: Realizado | null;
-  /** true solo con sesión y perteneciendo al grupo activo. */
+  /** true solo con sesión iniciada (no hace falta pertenecer a un grupo: se puede marcar individual). */
   puedeMarcar: boolean;
-  onMarcar: (fecha: string, notas: string) => Promise<void>;
+  /** Nombre del grupo activo; null/undefined si no hay ninguno (fuerza individual). */
+  nombreGrupoActivo?: string | null;
+  onMarcar: (fecha: string, notas: string, individual: boolean) => Promise<void>;
   onDesmarcar: () => Promise<void>;
 }) {
   const [abierto, setAbierto] = useState(false);
   const [fecha, setFecha] = useState(fechaHoy);
   const [notas, setNotas] = useState("");
+  const [individual, setIndividual] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
   if (!puedeMarcar && !realizado) return null;
@@ -48,6 +54,9 @@ export function MarcarRealizado({
           <p>
             Realizado el{" "}
             <span className="text-nieve">{fechaLegible(realizado.fecha)}</span>
+            {realizado.grupoId === null && (
+              <span className="text-roca-300"> · individual</span>
+            )}
           </p>
           {realizado.notas && (
             <p className="mt-0.5 text-roca-300">{realizado.notas}</p>
@@ -79,6 +88,8 @@ export function MarcarRealizado({
     );
   }
 
+  const seGuardaIndividual = individual || !nombreGrupoActivo;
+
   return (
     <form
       className="mt-3 space-y-2 rounded border border-roca-700 p-3"
@@ -86,9 +97,10 @@ export function MarcarRealizado({
         e.preventDefault();
         setGuardando(true);
         try {
-          await onMarcar(fecha, notas.trim());
+          await onMarcar(fecha, notas.trim(), seGuardaIndividual);
           setAbierto(false);
           setNotas("");
+          setIndividual(false);
         } finally {
           setGuardando(false);
         }
@@ -118,6 +130,22 @@ export function MarcarRealizado({
         placeholder="Notas (opcional)"
         className="w-full rounded border border-roca-700 bg-roca-900/70 px-2 py-1 text-xs text-nieve placeholder:text-roca-500 focus:border-ocre-600 focus:outline-none"
       />
+      {nombreGrupoActivo && (
+        <label className="flex items-center gap-2 text-xs text-hielo-200">
+          <input
+            type="checkbox"
+            checked={individual}
+            onChange={(e) => setIndividual(e.target.checked)}
+            className="accent-ocre-600"
+          />
+          Marcar como individual (no se comparte con el grupo)
+        </label>
+      )}
+      <p className="text-[11px] text-roca-400">
+        {seGuardaIndividual
+          ? "Se guardará como logro individual, solo tuyo."
+          : `Se compartirá con «${nombreGrupoActivo}».`}
+      </p>
       <div className="flex gap-2">
         <button
           type="submit"

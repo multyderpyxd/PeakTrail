@@ -65,7 +65,7 @@ import { entrar, salir, useUsuario } from "@/lib/auth";
 import {
   desmarcarRealizado,
   escucharRealizados,
-  idRealizado,
+  escucharRealizadosPropios,
   marcarRealizado,
   type Realizado,
 } from "@/lib/realizados";
@@ -228,11 +228,19 @@ export default function MapView() {
   const [planVisible, setPlanVisible] = useState<RutaPlaneada | null>(null);
   const marcadoresPlan = useRef<maplibregl.Marker[]>([]);
 
-  // Sesión, grupo activo, registro de realizados del grupo y panel de progreso
+  // Sesión, grupo activo, registro de realizados y panel de progreso
   const sesion = useUsuario();
-  const [realizados, setRealizados] = useState<Map<string, Realizado>>(
+  // Realizados del grupo activo (para el ranking/evolución de Progreso):
+  // solo lo que se compartió con ESE grupo.
+  const [realizadosGrupo, setRealizadosGrupo] = useState<Map<string, Realizado>>(
     new Map(),
   );
+  // Realizados propios (individuales + de cualquier grupo): histórico
+  // personal, independiente del grupo activo — es lo que decide si una
+  // ficha aparece "ya hecha" y alimenta "Lo mío" en Progreso.
+  const [realizadosPropios, setRealizadosPropios] = useState<
+    Map<string, Realizado>
+  >(new Map());
   const [verProgreso, setVerProgreso] = useState(false);
   const [verExplorador, setVerExplorador] = useState(false);
   const [verDescargas, setVerDescargas] = useState(false);
@@ -258,9 +266,15 @@ export default function MapView() {
     guardarGrupoActivo(id);
   }
 
+  const nombreGrupoActivo = sesion.grupos.find((g) => g.id === grupoActivoId)?.nombre;
+
   useEffect(() => {
-    return escucharRealizados(grupoActivoId, setRealizados);
+    return escucharRealizados(grupoActivoId, setRealizadosGrupo);
   }, [grupoActivoId]);
+
+  useEffect(() => {
+    return escucharRealizadosPropios(sesion.usuario?.uid ?? null, setRealizadosPropios);
+  }, [sesion.usuario?.uid]);
 
   // Los planes guardados son del grupo activo: al cambiar de grupo se
   // invalida la caché para que el planificador los vuelva a pedir.
@@ -273,14 +287,19 @@ export default function MapView() {
     if (procesarRetornoStrava()) setVerProgreso(true);
   }, []);
 
-  const puedeMarcar = Boolean(sesion.usuario && grupoActivoId);
+  // No hace falta pertenecer a un grupo para marcar (sin grupo activo, se
+  // guarda como logro individual, ver MarcarRealizado/marcar más abajo),
+  // pero sí estar en el roster de amigos: las reglas de Firestore lo exigen
+  // igual para los individuales (el sign-in de Google no está restringido a
+  // nadie en concreto), así que ocultarlo aquí evita un intento de guardado
+  // que fallaría en silencio para quien no sea del grupo cerrado.
+  const puedeMarcar = Boolean(sesion.usuario && sesion.amigo);
 
   function realizadoDe(tipo: Realizado["tipo"], refId: string) {
-    if (!sesion.usuario || !grupoActivoId) return null;
-    return (
-      realizados.get(idRealizado(sesion.usuario.uid, grupoActivoId, tipo, refId)) ??
-      null
-    );
+    for (const r of realizadosPropios.values()) {
+      if (r.tipo === tipo && r.refId === refId) return r;
+    }
+    return null;
   }
 
   async function marcar(
@@ -290,13 +309,14 @@ export default function MapView() {
     categoria: string,
     fecha: string,
     notas: string,
+    individual: boolean,
   ) {
-    if (!sesion.usuario || !grupoActivoId) return;
+    if (!sesion.usuario) return;
     await marcarRealizado({
       usuario: sesion.usuario.uid,
       nombreUsuario:
         sesion.usuario.displayName ?? sesion.usuario.email ?? "Anónimo",
-      grupoId: grupoActivoId,
+      grupoId: individual ? null : grupoActivoId,
       tipo,
       refId,
       nombre,
@@ -743,17 +763,15 @@ export default function MapView() {
     );
   }, [actividades, mostrarActividades, cargado]);
 
-  // Planes propios marcados como realizados (p. ej. por el emparejado Strava)
+  // Planes propios marcados como realizados (p. ej. por el emparejado Strava),
+  // individuales o de cualquier grupo: es mi histórico, no el del grupo activo.
   const planesHechos = useMemo(() => {
     const hechos = new Set<string>();
-    if (!sesion.usuario) return hechos;
-    for (const r of realizados.values()) {
-      if (r.tipo === "plan" && r.usuario === sesion.usuario.uid) {
-        hechos.add(r.refId);
-      }
+    for (const r of realizadosPropios.values()) {
+      if (r.tipo === "plan") hechos.add(r.refId);
     }
     return hechos;
-  }, [realizados, sesion.usuario]);
+  }, [realizadosPropios]);
 
   // Ruta tal y como se muestra: en su sentido original o invertida
   const rutaVista = useMemo(() => {
@@ -1389,8 +1407,7 @@ export default function MapView() {
                     >
                       <IconoGrupo width={13} height={13} />
                       <span className="max-w-20 truncate">
-                        {sesion.grupos.find((g) => g.id === grupoActivoId)?.nombre ??
-                          "Grupo"}
+                        {nombreGrupoActivo ?? "Grupo"}
                       </span>
                       {sesion.grupos.length > 1 && (
                         <IconoDespliegue
@@ -1502,12 +1519,13 @@ export default function MapView() {
       {/* Panel de progreso */}
       {verProgreso && (
         <Progreso
-          realizados={realizados}
+          realizadosPropios={realizadosPropios}
+          realizadosGrupo={realizadosGrupo}
           usuario={sesion.usuario}
           grupoActivoId={grupoActivoId}
           admin={sesion.admin}
           propietario={sesion.propietario}
-          nombreGrupo={sesion.grupos.find((g) => g.id === grupoActivoId)?.nombre}
+          nombreGrupo={nombreGrupoActivo}
           rutas={rutasRef.current}
           totalRutas={rutasRef.current?.size ?? 0}
           onCerrar={() => setVerProgreso(false)}
@@ -1522,9 +1540,8 @@ export default function MapView() {
         <Explorador
           rutas={cargado ? rutasRef.current : null}
           actividades={actividades}
-          realizados={realizados}
+          realizadosPropios={realizadosPropios}
           usuario={sesion.usuario}
-          grupoId={grupoActivoId}
           onIr={irAResultado}
           onVerActividad={verActividad}
           onCerrar={() => setVerExplorador(false)}
@@ -1546,9 +1563,10 @@ export default function MapView() {
           }}
           realizado={realizadoDe("elemento", seleccion.elemento.id)}
           puedeMarcar={puedeMarcar}
-          onMarcar={(fecha, notas) => {
+          nombreGrupoActivo={nombreGrupoActivo}
+          onMarcar={(fecha, notas, individual) => {
             const el = seleccion.elemento;
-            return marcar("elemento", el.id, el.nombre, el.tipo, fecha, notas);
+            return marcar("elemento", el.id, el.nombre, el.tipo, fecha, notas, individual);
           }}
           onDesmarcar={async () => {
             const r = realizadoDe("elemento", seleccion.elemento.id);
@@ -1574,8 +1592,17 @@ export default function MapView() {
           onCursorPerfil={moverCursorPerfil}
           realizado={realizadoDe("ruta", rutaVista.id)}
           puedeMarcar={puedeMarcar}
-          onMarcar={(fecha, notas) =>
-            marcar("ruta", rutaVista.id, rutaVista.nombre, rutaVista.red, fecha, notas)
+          nombreGrupoActivo={nombreGrupoActivo}
+          onMarcar={(fecha, notas, individual) =>
+            marcar(
+              "ruta",
+              rutaVista.id,
+              rutaVista.nombre,
+              rutaVista.red,
+              fecha,
+              notas,
+              individual,
+            )
           }
           onDesmarcar={async () => {
             const r = realizadoDe("ruta", rutaVista.id);

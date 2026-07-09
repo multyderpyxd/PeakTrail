@@ -557,7 +557,8 @@ const FILAS_PERSONALES = [
 ] as const;
 
 export function Progreso({
-  realizados,
+  realizadosPropios,
+  realizadosGrupo,
   usuario,
   grupoActivoId,
   admin,
@@ -568,7 +569,10 @@ export function Progreso({
   onCerrar,
   onActividades,
 }: {
-  realizados: Map<string, Realizado>;
+  /** Todos mis realizados: individuales y de cualquier grupo — histórico personal. */
+  realizadosPropios: Map<string, Realizado>;
+  /** Realizados de todo el grupo activo (para el ranking y la evolución). */
+  realizadosGrupo: Map<string, Realizado>;
   usuario: User | null;
   /** Grupo activo (null si el usuario no pertenece a ninguno). */
   grupoActivoId: string | null;
@@ -583,42 +587,42 @@ export function Progreso({
   onActividades?: (todas: ActividadStrava[]) => void;
 }) {
   const [amigosRoster, setAmigosRoster] = useState<Amigo[] | null>(null);
-  const { propios, rutasPropias, hechosPorBanda, grupo } = useMemo(() => {
+
+  // "Lo mío": mis realizados, sean individuales o de cualquier grupo.
+  const { propios, rutasPropias, hechosPorBanda } = useMemo(() => {
     const propios: Record<string, number> = { pico: 0, collado: 0, ibon: 0, refugio: 0 };
     const hechosPorBanda = BANDAS_ALTITUD.map(() => 0);
     let rutasPropias = 0;
-    const grupo = new Map<string, { nombre: string; total: number; picos: number }>();
-    for (const r of realizados.values()) {
-      const datos = grupo.get(r.usuario) ?? {
+    for (const r of realizadosPropios.values()) {
+      if (r.tipo === "ruta") {
+        rutasPropias += 1;
+      } else {
+        propios[r.categoria] = (propios[r.categoria] ?? 0) + 1;
+        if (r.categoria === "pico") {
+          const altitud = elementosPorId.get(r.refId)?.altitud;
+          const banda = altitud !== undefined && altitud !== null ? bandaDe(altitud) : -1;
+          if (banda !== -1) hechosPorBanda[banda] += 1;
+        }
+      }
+    }
+    return { propios, rutasPropias, hechosPorBanda };
+  }, [realizadosPropios]);
+
+  // "El grupo": ranking de todo lo compartido con el grupo activo, no lo individual.
+  const grupo = useMemo(() => {
+    const mapa = new Map<string, { nombre: string; total: number; picos: number }>();
+    for (const r of realizadosGrupo.values()) {
+      const datos = mapa.get(r.usuario) ?? {
         nombre: r.nombreUsuario,
         total: 0,
         picos: 0,
       };
       datos.total += 1;
       if (r.categoria === "pico") datos.picos += 1;
-      grupo.set(r.usuario, datos);
-      if (usuario && r.usuario === usuario.uid) {
-        if (r.tipo === "ruta") {
-          rutasPropias += 1;
-        } else {
-          propios[r.categoria] = (propios[r.categoria] ?? 0) + 1;
-          if (r.categoria === "pico") {
-            const altitud = elementosPorId.get(r.refId)?.altitud;
-            const banda = altitud !== undefined && altitud !== null ? bandaDe(altitud) : -1;
-            if (banda !== -1) hechosPorBanda[banda] += 1;
-          }
-        }
-      }
+      mapa.set(r.usuario, datos);
     }
-    return {
-      propios,
-      rutasPropias,
-      hechosPorBanda,
-      grupo: [...grupo.values()].sort(
-        (a, b) => b.picos - a.picos || b.total - a.total,
-      ),
-    };
-  }, [realizados, usuario]);
+    return [...mapa.values()].sort((a, b) => b.picos - a.picos || b.total - a.total);
+  }, [realizadosGrupo]);
 
   // Totales por banda de altitud: se recorre el catálogo una sola vez
   const totalesPorBanda = useMemo(() => {
@@ -642,12 +646,12 @@ export function Progreso({
       cubos.push({ etiqueta: d.toLocaleDateString("es-ES", { month: "short" }), total: 0 });
     }
     const indice = new Map(claves.map((clave, i) => [clave, i]));
-    for (const r of realizados.values()) {
+    for (const r of realizadosGrupo.values()) {
       const i = indice.get(r.fecha.slice(0, 7));
       if (i !== undefined) cubos[i].total += 1;
     }
     return cubos;
-  }, [realizados]);
+  }, [realizadosGrupo]);
 
   const tresmilesPendientes =
     totalesPorBanda[BANDAS_ALTITUD.length - 1] -
@@ -663,7 +667,7 @@ export function Progreso({
     (TOTALES.refugio - (propios.refugio ?? 0)) +
     (totalRutas - rutasPropias);
 
-  // Elementos y rutas de cada comunidad, y cuántos lleva hechos el usuario
+  // Elementos y rutas de cada comunidad, y cuántos llevo hechos (mi histórico)
   const { totalesPorComunidad, hechosPorComunidad } = useMemo(() => {
     const totales: Record<Comunidad, number> = { aragon: 0, navarra: 0, cataluna: 0 };
     for (const el of elementosPorId.values()) {
@@ -674,18 +678,15 @@ export function Progreso({
     }
 
     const hechos: Record<Comunidad, number> = { aragon: 0, navarra: 0, cataluna: 0 };
-    if (usuario) {
-      for (const r of realizados.values()) {
-        if (r.usuario !== usuario.uid) continue;
-        const comunidad =
-          r.tipo === "elemento"
-            ? elementosPorId.get(r.refId)?.comunidad
-            : rutas?.get(r.refId)?.comunidad;
-        if (comunidad) hechos[comunidad] += 1;
-      }
+    for (const r of realizadosPropios.values()) {
+      const comunidad =
+        r.tipo === "elemento"
+          ? elementosPorId.get(r.refId)?.comunidad
+          : rutas?.get(r.refId)?.comunidad;
+      if (comunidad) hechos[comunidad] += 1;
     }
     return { totalesPorComunidad: totales, hechosPorComunidad: hechos };
-  }, [realizados, usuario, rutas]);
+  }, [realizadosPropios, rutas]);
 
   return (
     <section
@@ -838,7 +839,7 @@ export function Progreso({
           <SeccionStrava
             usuario={usuario}
             grupoId={grupoActivoId}
-            realizados={realizados}
+            realizadosPropios={realizadosPropios}
             rutas={rutas}
             onActividades={onActividades}
           />

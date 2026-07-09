@@ -37,6 +37,7 @@ export function FichaRuta({
   onCursorPerfil,
   realizado,
   puedeMarcar,
+  nombreGrupoActivo,
   onMarcar,
   onDesmarcar,
   usuario,
@@ -49,7 +50,8 @@ export function FichaRuta({
   onCursorPerfil?: (km: number | null) => void;
   realizado: Realizado | null;
   puedeMarcar: boolean;
-  onMarcar: (fecha: string, notas: string) => Promise<void>;
+  nombreGrupoActivo?: string | null;
+  onMarcar: (fecha: string, notas: string, individual: boolean) => Promise<void>;
   onDesmarcar: () => Promise<void>;
   usuario: User | null;
   grupoId: string | null;
@@ -197,6 +199,7 @@ export function FichaRuta({
         <MarcarRealizado
           realizado={realizado}
           puedeMarcar={puedeMarcar}
+          nombreGrupoActivo={nombreGrupoActivo}
           onMarcar={onMarcar}
           onDesmarcar={onDesmarcar}
         />

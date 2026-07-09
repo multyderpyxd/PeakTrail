@@ -12,16 +12,18 @@ import {
 import { getDb } from "./firebase";
 
 /**
- * Registro de "lo he hecho": un documento por usuario, grupo y elemento/ruta,
- * con id determinista para que marcar/desmarcar sea idempotente. Cada grupo
- * ve y comparte solo lo suyo (reglas de firestore.rules vía miembroDeGrupo);
- * cada uno escribe solo lo suyo.
+ * Registro de "lo he hecho": un documento por usuario, grupo (o individual,
+ * sin grupo) y elemento/ruta, con id determinista para que marcar/desmarcar
+ * sea idempotente. Con grupo, todo el grupo lo ve (reglas de firestore.rules
+ * vía miembroDeGrupo); sin grupo (individual, `grupoId: null`) es solo tuyo.
+ * Cada uno escribe/borra solo lo suyo, tenga grupo o no.
  */
 export interface Realizado {
   id: string;
   usuario: string; // uid
   nombreUsuario: string;
-  grupoId: string;
+  /** null = logro individual, no compartido con ningún grupo. */
+  grupoId: string | null;
   tipo: "elemento" | "ruta" | "plan";
   refId: string;
   /** Nombre denormalizado para listados sin cruzar con el catálogo. */
@@ -34,17 +36,17 @@ export interface Realizado {
 }
 
 /**
- * El grupo entra en el id: el mismo usuario puede marcar el mismo elemento
- * en dos grupos distintos (cada uno con su propio ranking) sin que un
- * logro pise al otro.
+ * El grupo (o "individual" si no hay) entra en el id: el mismo usuario puede
+ * marcar el mismo elemento en dos grupos distintos, o individualmente y
+ * también en un grupo, sin que un logro pise al otro.
  */
 export function idRealizado(
   uid: string,
-  grupoId: string,
+  grupoId: string | null,
   tipo: Realizado["tipo"],
   refId: string,
 ) {
-  return `${uid}__${grupoId}__${tipo}__${refId}`;
+  return `${uid}__${grupoId ?? "individual"}__${tipo}__${refId}`;
 }
 
 export async function marcarRealizado(
@@ -74,6 +76,34 @@ export function escucharRealizados(
   }
   return onSnapshot(
     query(collection(getDb(), "realizados"), where("grupoId", "==", grupoId)),
+    (captura) => {
+      const mapa = new Map<string, Realizado>();
+      captura.forEach((d) => {
+        const datos = d.data() as Omit<Realizado, "id">;
+        mapa.set(d.id, { ...datos, id: d.id });
+      });
+      alCambiar(mapa);
+    },
+    () => alFallar?.(),
+  );
+}
+
+/**
+ * Escucha en vivo TODOS los realizados propios (individuales y de
+ * cualquier grupo al que pertenezcas): es el histórico personal, no
+ * depende de cuál sea el grupo activo. Sin sesión, no se suscribe.
+ */
+export function escucharRealizadosPropios(
+  uid: string | null,
+  alCambiar: (realizados: Map<string, Realizado>) => void,
+  alFallar?: () => void,
+): Unsubscribe {
+  if (!uid) {
+    alCambiar(new Map());
+    return () => {};
+  }
+  return onSnapshot(
+    query(collection(getDb(), "realizados"), where("usuario", "==", uid)),
     (captura) => {
       const mapa = new Map<string, Realizado>();
       captura.forEach((d) => {

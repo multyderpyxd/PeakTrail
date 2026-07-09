@@ -38,6 +38,7 @@ export function FichaElemento({
   onCerrar,
   realizado,
   puedeMarcar,
+  nombreGrupoActivo,
   onMarcar,
   onDesmarcar,
   usuario,
@@ -47,7 +48,8 @@ export function FichaElemento({
   onCerrar: () => void;
   realizado: Realizado | null;
   puedeMarcar: boolean;
-  onMarcar: (fecha: string, notas: string) => Promise<void>;
+  nombreGrupoActivo?: string | null;
+  onMarcar: (fecha: string, notas: string, individual: boolean) => Promise<void>;
   onDesmarcar: () => Promise<void>;
   usuario: User | null;
   grupoId: string | null;
@@ -132,6 +134,7 @@ export function FichaElemento({
         <MarcarRealizado
           realizado={realizado}
           puedeMarcar={puedeMarcar}
+          nombreGrupoActivo={nombreGrupoActivo}
           onMarcar={onMarcar}
           onDesmarcar={onDesmarcar}
         />

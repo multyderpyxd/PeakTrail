@@ -3,7 +3,7 @@ import type { User } from "firebase/auth";
 import type { ElementoGeografico, TipoElemento } from "@/types/catalogo";
 import type { Comunidad } from "@/types/catalogo";
 import type { RedRuta, Ruta } from "@/types/rutas";
-import { idRealizado, type Realizado } from "@/lib/realizados";
+import type { Realizado } from "@/lib/realizados";
 import type { ActividadStrava } from "@/lib/strava";
 import { elementosPorId } from "./elementos";
 import { COLOR_TIPO } from "./marcadores";
@@ -82,9 +82,8 @@ interface FilaDatos {
 export function Explorador({
   rutas,
   actividades,
-  realizados,
+  realizadosPropios,
   usuario,
-  grupoId,
   onIr,
   onVerActividad,
   onCerrar,
@@ -92,9 +91,9 @@ export function Explorador({
   rutas: Map<string, Ruta> | null;
   /** Salidas de Strava en caché; null si nunca se importaron. */
   actividades: ActividadStrava[] | null;
-  realizados: Map<string, Realizado>;
+  /** Mi histórico completo (individual + cualquier grupo), no solo el grupo activo. */
+  realizadosPropios: Map<string, Realizado>;
   usuario: User | null;
-  grupoId: string | null;
   onIr: (resultado: ResultadoBusqueda) => void;
   onVerActividad: (actividad: ActividadStrava) => void;
   onCerrar: () => void;
@@ -111,10 +110,12 @@ export function Explorador({
   });
   const [limite, setLimite] = useState(PASO_LISTA);
 
+  const clavesHechas = useMemo(
+    () => new Set([...realizadosPropios.values()].map((r) => `${r.tipo}__${r.refId}`)),
+    [realizadosPropios],
+  );
   const hechoPorMi = (tipo: Realizado["tipo"], refId: string) =>
-    usuario && grupoId
-      ? realizados.has(idRealizado(usuario.uid, grupoId, tipo, refId))
-      : false;
+    Boolean(usuario) && clavesHechas.has(`${tipo}__${refId}`);
 
   // Filas de la pestaña activa, con todo lo necesario para filtrar y ordenar
   const filas = useMemo<FilaDatos[]>(() => {
@@ -156,9 +157,9 @@ export function Explorador({
       });
     }
     return lista;
-    // realizados/usuario cambian el campo hecho; elementosPorId es estable tras cargar
+    // clavesHechas/usuario cambian el campo hecho; elementosPorId es estable tras cargar
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pestana, rutas, actividades, realizados, usuario]);
+  }, [pestana, rutas, actividades, clavesHechas, usuario]);
 
   const visibles = useMemo(() => {
     const buscado = normalizar(texto.trim());

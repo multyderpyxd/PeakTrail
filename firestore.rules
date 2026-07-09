@@ -18,12 +18,20 @@ service cloud.firestore {
       return autenticado() && request.auth.token.email == "josemiangos@gmail.com";
     }
 
+    // En el roster global de amigos, o el propietario. El sign-in de Google
+    // no está restringido a un dominio, así que esto es lo único que
+    // distingue a alguien del grupo cerrado de cualquier cuenta de Google.
+    function esAmigo() {
+      return esPropietario() ||
+        (autenticado() &&
+          exists(/databases/$(database)/documents/amigos/$(request.auth.token.email)));
+    }
+
     // Admin del roster de amigos y de los grupos (campo admin: true en su
     // propio doc de `amigos`), o el propietario.
     function esAdmin() {
       return esPropietario() ||
-        (autenticado() &&
-          exists(/databases/$(database)/documents/amigos/$(request.auth.token.email)) &&
+        (esAmigo() &&
           get(/databases/$(database)/documents/amigos/$(request.auth.token.email)).data.admin == true);
     }
 
@@ -66,13 +74,18 @@ service cloud.firestore {
       allow update, delete: if miembroDeGrupo(resource.data.grupoId);
     }
 
-    // Registro de realizados: cada uno escribe lo suyo, todo el grupo lo ve
+    // Registro de realizados: cada uno escribe lo suyo. Con grupo (grupoId
+    // no nulo), todo el grupo lo ve; individual (grupoId nulo), solo el
+    // propio autor puede leerlo, tenga o no grupoId.
     match /realizados/{id} {
-      allow read: if miembroDeGrupo(resource.data.grupoId);
-      allow create, update: if miembroDeGrupo(request.resource.data.grupoId) &&
-        request.resource.data.usuario == request.auth.uid;
-      allow delete: if miembroDeGrupo(resource.data.grupoId) &&
-        resource.data.usuario == request.auth.uid;
+      allow read: if (resource.data.grupoId != null && miembroDeGrupo(resource.data.grupoId)) ||
+        (autenticado() && resource.data.usuario == request.auth.uid);
+      allow create, update: if request.resource.data.usuario == request.auth.uid &&
+        (
+          (request.resource.data.grupoId == null && esAmigo()) ||
+          (request.resource.data.grupoId != null && miembroDeGrupo(request.resource.data.grupoId))
+        );
+      allow delete: if autenticado() && resource.data.usuario == request.auth.uid;
     }
 
     // Fotos y comentarios del grupo: todo el grupo lee, cada uno borra lo suyo
