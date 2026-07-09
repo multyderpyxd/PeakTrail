@@ -327,9 +327,19 @@ function PanelAmigos({
 
 /**
  * Grupos: crear, renombrar, borrar y gestionar miembros (tomados del roster
- * de amigos ya cargado por PanelAmigos, para no repetir la consulta).
+ * de amigos ya cargado por PanelAmigos, para no repetir la consulta). Cada
+ * grupo muestra si el propio admin es miembro («tú») y un atajo para
+ * unirse/salir, porque crear un grupo no te añade a él automáticamente —
+ * sin este atajo era fácil crear un grupo y no entender por qué no aparecía
+ * el selector de grupo activo.
  */
-function PanelGrupos({ amigos }: { amigos: Amigo[] | null }) {
+function PanelGrupos({
+  amigos,
+  emailPropio,
+}: {
+  amigos: Amigo[] | null;
+  emailPropio: string;
+}) {
   const [grupos, setGrupos] = useState<Grupo[] | null>(null);
   const [nombreNuevo, setNombreNuevo] = useState("");
   const [seleccionNueva, setSeleccionNueva] = useState<Set<string>>(new Set());
@@ -377,6 +387,7 @@ function PanelGrupos({ amigos }: { amigos: Amigo[] | null }) {
           const disponibles = (amigos ?? []).filter(
             (a) => !g.miembros.includes(a.email),
           );
+          const soyMiembro = g.miembros.includes(emailPropio);
           return (
             <li key={g.id} className="rounded border border-roca-800 p-2">
               <div className="flex items-center gap-2">
@@ -404,16 +415,24 @@ function PanelGrupos({ amigos }: { amigos: Amigo[] | null }) {
                     </button>
                   </form>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditando(g.id);
-                      setNombreEdicion(g.nombre);
-                    }}
-                    className="min-w-0 flex-1 truncate text-left text-xs text-hielo-100 hover:text-nieve"
-                  >
-                    {g.nombre}
-                  </button>
+                  <>
+                    <span className="min-w-0 flex-1 truncate text-xs text-hielo-100">
+                      {g.nombre}
+                      {soyMiembro && (
+                        <span className="ml-1.5 text-[10px] text-pino-300">tú</span>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditando(g.id);
+                        setNombreEdicion(g.nombre);
+                      }}
+                      className="text-[11px] text-roca-300 underline decoration-roca-500 underline-offset-2 transition-colors hover:text-nieve"
+                    >
+                      Renombrar
+                    </button>
+                  </>
                 )}
                 <button
                   type="button"
@@ -427,6 +446,19 @@ function PanelGrupos({ amigos }: { amigos: Amigo[] | null }) {
                   <IconoPapelera width={13} height={13} />
                 </button>
               </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  await (soyMiembro
+                    ? quitarMiembro(g.id, emailPropio)
+                    : anadirMiembro(g.id, emailPropio)
+                  ).catch(() => setError(true));
+                  await recargar();
+                }}
+                className="mt-1.5 text-[11px] text-hielo-300 underline decoration-roca-500 underline-offset-2 transition-colors hover:text-nieve"
+              >
+                {soyMiembro ? "Salir del grupo" : "Unirme al grupo"}
+              </button>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {g.miembros.map((email) => (
                   <span
@@ -819,7 +851,7 @@ export function Progreso({
               emailPropio={usuario.email.toLowerCase()}
               onCambio={setAmigosRoster}
             />
-            <PanelGrupos amigos={amigosRoster} />
+            <PanelGrupos amigos={amigosRoster} emailPropio={usuario.email.toLowerCase()} />
           </>
         )}
       </div>

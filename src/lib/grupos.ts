@@ -6,11 +6,13 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  onSnapshot,
   query,
   serverTimestamp,
   Timestamp,
   updateDoc,
   where,
+  type Unsubscribe,
 } from "firebase/firestore";
 import { getDb } from "./firebase";
 import type { Grupo, GrupoResumen } from "@/types/grupo";
@@ -36,14 +38,25 @@ export async function listarGrupos(): Promise<Grupo[]> {
   return resultado.docs.map(aGrupo).sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
 
-/** Grupos de los que `email` es miembro (para el selector de grupo activo). */
-export async function listarGruposDe(email: string): Promise<GrupoResumen[]> {
-  const resultado = await getDocs(
+/**
+ * Escucha en vivo los grupos de los que `email` es miembro (para el
+ * selector de grupo activo y los títulos de Progreso): si un admin renombra
+ * el grupo o cambia sus miembros, se refleja solo, sin esperar a un nuevo
+ * inicio de sesión.
+ */
+export function escucharGruposDe(
+  email: string,
+  alCambiar: (grupos: GrupoResumen[]) => void,
+): Unsubscribe {
+  return onSnapshot(
     query(collection(getDb(), COLECCION), where("miembros", "array-contains", email)),
+    (captura) => {
+      const grupos = captura.docs
+        .map((d) => ({ id: d.id, nombre: d.data().nombre as string }))
+        .sort((a, b) => a.nombre.localeCompare(b.nombre));
+      alCambiar(grupos);
+    },
   );
-  return resultado.docs
-    .map((d) => ({ id: d.id, nombre: d.data().nombre as string }))
-    .sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
 
 export async function crearGrupo(nombre: string, miembros: string[]): Promise<string> {

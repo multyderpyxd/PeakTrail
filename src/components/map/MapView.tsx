@@ -1378,24 +1378,27 @@ export default function MapView() {
                     <p className="text-[10px] text-ocre-400">Sin grupo</p>
                   )}
                 </div>
-                {sesion.grupos.length > 1 && (
+                {sesion.grupos.length > 0 && (
                   <div className="relative">
                     <button
                       type="button"
                       aria-expanded={verSelectorGrupo}
+                      disabled={sesion.grupos.length < 2}
                       onClick={() => setVerSelectorGrupo((v) => !v)}
-                      className="flex items-center gap-1.5 rounded-full border border-roca-700 px-2.5 py-1 text-[11px] text-hielo-200 transition-colors hover:border-roca-500 hover:text-nieve"
+                      className="flex items-center gap-1.5 rounded-full border border-roca-700 px-2.5 py-1 text-[11px] text-hielo-200 transition-colors hover:border-roca-500 hover:text-nieve disabled:cursor-default disabled:hover:border-roca-700 disabled:hover:text-hielo-200"
                     >
                       <IconoGrupo width={13} height={13} />
                       <span className="max-w-20 truncate">
                         {sesion.grupos.find((g) => g.id === grupoActivoId)?.nombre ??
                           "Grupo"}
                       </span>
-                      <IconoDespliegue
-                        width={11}
-                        height={11}
-                        className={`transition-transform ${verSelectorGrupo ? "rotate-180" : ""}`}
-                      />
+                      {sesion.grupos.length > 1 && (
+                        <IconoDespliegue
+                          width={11}
+                          height={11}
+                          className={`transition-transform ${verSelectorGrupo ? "rotate-180" : ""}`}
+                        />
+                      )}
                     </button>
                     {verSelectorGrupo && (
                       <div className="absolute left-0 top-full z-20 mt-2 w-40 overflow-hidden rounded-lg border border-roca-700 bg-roca-950/95 shadow-lg shadow-roca-950/60">

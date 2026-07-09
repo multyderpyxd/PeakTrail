@@ -8,9 +8,9 @@ import {
   signOut,
   type User,
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { getDb, getFirebaseAuth, isFirebaseConfigured } from "./firebase";
-import { listarGruposDe } from "./grupos";
+import { escucharGruposDe } from "./grupos";
 import { esPropietario } from "./propietario";
 import type { GrupoResumen } from "@/types/grupo";
 
@@ -34,7 +34,11 @@ const ESTADO_VACIO: Omit<EstadoUsuario, "cargando" | "usuario"> = {
   grupos: [],
 };
 
-/** Sesión actual y pertenencia al roster/grupos, reactiva a entradas/salidas. */
+/**
+ * Sesión actual y pertenencia al roster/grupos, reactiva a entradas/salidas
+ * Y a cambios en vivo (onSnapshot): si un admin te asciende, te añade a un
+ * grupo o lo renombra, se refleja sin esperar a un nuevo inicio de sesión.
+ */
 export function useUsuario(): EstadoUsuario {
   const [estado, setEstado] = useState<EstadoUsuario>({
     cargando: isFirebaseConfigured,
@@ -44,37 +48,54 @@ export function useUsuario(): EstadoUsuario {
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
-    return onAuthStateChanged(getFirebaseAuth(), async (usuario) => {
+    let dejarAmigo: (() => void) | undefined;
+    let dejarGrupos: (() => void) | undefined;
+
+    const dejarAuth = onAuthStateChanged(getFirebaseAuth(), (usuario) => {
+      dejarAmigo?.();
+      dejarGrupos?.();
+      dejarAmigo = undefined;
+      dejarGrupos = undefined;
+
       if (!usuario?.email) {
         setEstado({ cargando: false, usuario: null, ...ESTADO_VACIO });
         return;
       }
       const email = usuario.email.toLowerCase();
-      let amigo = esPropietario(email);
-      let admin = esPropietario(email);
-      let grupos: GrupoResumen[] = [];
-      try {
-        const [fichaAmigo, gruposDe] = await Promise.all([
-          getDoc(doc(getDb(), "amigos", email)),
-          listarGruposDe(email),
-        ]);
-        if (fichaAmigo.exists()) {
-          amigo = true;
-          if (fichaAmigo.data()?.admin === true) admin = true;
-        }
-        grupos = gruposDe;
-      } catch {
-        // sin permiso o sin red: se queda con los valores por defecto
-      }
+      const propietario = esPropietario(email);
       setEstado({
         cargando: false,
         usuario,
-        amigo,
-        admin,
-        propietario: esPropietario(email),
-        grupos,
+        amigo: propietario,
+        admin: propietario,
+        propietario,
+        grupos: [],
+      });
+
+      dejarAmigo = onSnapshot(
+        doc(getDb(), "amigos", email),
+        (ficha) => {
+          const esAdminAmigo = ficha.data()?.admin === true;
+          setEstado((actual) => ({
+            ...actual,
+            amigo: propietario || ficha.exists(),
+            admin: propietario || esAdminAmigo,
+          }));
+        },
+        () => {
+          // sin permiso o sin red: se queda con los valores por defecto
+        },
+      );
+      dejarGrupos = escucharGruposDe(email, (grupos) => {
+        setEstado((actual) => ({ ...actual, grupos }));
       });
     });
+
+    return () => {
+      dejarAuth();
+      dejarAmigo?.();
+      dejarGrupos?.();
+    };
   }, []);
 
   return estado;
